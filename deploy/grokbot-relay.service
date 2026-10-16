@@ -1,0 +1,33 @@
+[Unit]
+Description=Grok Bot relay (Cursor BDK serve, loopback only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grokbot
+Group=grokbot
+WorkingDirectory=/opt/grokbot-relay/relay
+EnvironmentFile=/etc/grokbot-relay/env
+Environment=HOME=/var/lib/grokbot
+Environment=NODE_ENV=production
+# VERIFY LOCALLY: --port / --host / --mode / --bearer-token flags (documented in @cursor/bdk 0.2.25 CLI reference).
+ExecStart=/opt/grokbot-relay/relay/node_modules/.bin/bdk serve --dir . --host 127.0.0.1 --port ${GROKBOT_RELAY_PORT} --mode single --state-root /var/lib/grokbot/state --bearer-token ${GROKBOT_RELAY_TOKEN} --no-playground
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/grokbot /opt/grokbot-relay
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

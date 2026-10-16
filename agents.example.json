@@ -1,0 +1,6 @@
+{
+  "agents": [
+    { "name": "Feedhand", "description": "Drafts social posts on request. The owner approves in its own chat." },
+    { "name": "Research Bot", "description": "General research and errands." }
+  ]
+}
