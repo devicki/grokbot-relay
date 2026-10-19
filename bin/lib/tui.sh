@@ -154,6 +154,35 @@ ui_shell() {
   echo; printf '  %s ' "$(g_style --foreground "$C_DIM" "[exit $rc] ↵ back to menu")"; read -rs _ </dev/tty; echo
   return "$rc"
 }
+# Multi-select. $1 text, $2 comma-separated preselected, rest = items. Prints chosen, one per line.
+ui_multi() {
+  local text="$1" pre="$2"; shift 2
+  local it
+  case "$UI" in
+    gum)
+      ui_header >&2
+      "$GUM" choose --no-limit --header "$(printf '%b' "$text" | sed 's/^/  /')" --cursor "  ▸ " \
+        --selected="$pre" --selected-prefix "◉ " --unselected-prefix "○ " --cursor-prefix "○ " --height 14 "$@" ;;
+    whiptail|dialog)
+      local -a args=()
+      for it in "$@"; do
+        if [[ ",$pre," == *",$it,"* ]]; then args+=("$it" "" ON); else args+=("$it" "" OFF); fi
+      done
+      local out; out="$("$UI" --title "$UI_TITLE" --separate-output --checklist "$(printf '%b' "$text")" "$UI_H" "$UI_W" 10 "${args[@]}" 3>&1 1>&2 2>&3)" || return 1
+      printf '%s\n' "$out" ;;
+    *)
+      printf '\n%b\n' "$text" >&2
+      local i=1; local -a items=("$@")
+      for it in "${items[@]}"; do
+        local mark=" "; [[ ",$pre," == *",$it,"* ]] && mark="x"
+        printf '  %2d) [%s] %s\n' "$i" "$mark" "$it" >&2; i=$((i+1))
+      done
+      local a; read -r -p "Numbers to keep, space-separated (Enter = the [x] ones): " a </dev/tty || return 1
+      if [[ -z "$a" ]]; then for it in "${items[@]}"; do [[ ",$pre," == *",$it,"* ]] && echo "$it"; done; return 0; fi
+      local n; for n in $a; do [[ "$n" =~ ^[0-9]+$ ]] && (( n>=1 && n<=${#items[@]} )) && echo "${items[$((n-1))]}"; done ;;
+  esac
+}
+
 ui_danger() {
   [[ "$UI" == gum ]] || { legacy_ui_danger "$@"; return; }
   ui_header
@@ -314,7 +343,35 @@ t_agents_remove() {
 }
 t_agents_edit() { ui_root_or_msg && ui_shell "agents edit" cmd_agents edit; }
 
+# Pick the allowlist: account bots (when an API exists) + current names, multi-select, then manual names.
+t_agents_pick() {
+  ui_root_or_msg || return 1
+  local -a cur=() acct=() cand=(); local n note=""
+  while IFS= read -r n; do [[ -n "$n" && "$n" != "("* ]] && cur+=("$n"); done < <(agents_js list 2>/dev/null)
+  local fetched; if fetched="$(fetch_account_bots 2>/tmp/.grb-fetch-$$)"; then
+    while IFS= read -r n; do [[ -n "$n" ]] && acct+=("$n"); done <<<"$fetched"
+  else note="$(cat /tmp/.grb-fetch-$$)"; fi
+  rm -f /tmp/.grb-fetch-$$
+  local -A seen=(); for n in "${acct[@]}" "${cur[@]}"; do [[ -n "${seen[$n]:-}" ]] || { seen[$n]=1; cand+=("$n"); }; done
+  local pre; pre="$(IFS=,; echo "${cur[*]}")"
+  while true; do
+    local chosen=""
+    if (( ${#cand[@]} )); then
+      chosen="$(ui_multi "Select the bots this relay may contact (space toggles, enter confirms).${note:+\n$note}\nUncheck the example 'Research Bot'." "$pre" "${cand[@]}")" || return 0
+    elif [[ -n "$note" ]]; then ui_msg "$note"; fi
+    local extra; extra="$(ui_input "Add more bot names, comma-separated (exactly as in the Grok Bot app). Leave empty to skip:" "")" || extra=""
+    local list; list="$(printf '%s\n' "$chosen"; tr ',' '\n' <<<"$extra")"
+    if ! grep -q '[^[:space:]]' <<<"$list"; then ui_msg "The list can't be empty. Pick or type at least one bot."; continue; fi
+    local out rc=0; out="$(agents_set <<<"$list" 2>&1)" || rc=$?
+    if (( rc != 0 )); then ui_msg "$out"; continue; fi
+    restart_if_active >/dev/null 2>&1 || true
+    ui_msg "$out"
+    return 0
+  done
+}
+
 AGENTS_MENU=(
+  "pick|Pick bots (multi-select + manual)|t_agents_pick"
   "list|List allowed bots|t_agents_list"
   "add|Add a bot|t_agents_add"
   "remove|Remove a bot|t_agents_remove"
@@ -358,7 +415,7 @@ MAIN_MENU=(
 
 # ---------------------------------------------------------------- wizard
 w_welcome() {
-  ui_yesno "Welcome to grokbot-relay $(read_version "$(script_root)").\n\nThis wizard will:\n  - choose the Node runtime (private by default)\n  - install the service (user, /opt app, env, systemd)\n  - set your bot names\n  - sign in to Cursor\n  - start the relay and run checks\n  - let regular users connect\n\nContinue?"
+  ui_yesno "Welcome to grokbot-relay $(read_version "$(script_root)").\n\nThis wizard will:\n  - choose the Node runtime (private by default)\n  - install the service (user, /opt app, env, systemd)\n  - sign in to Cursor\n  - choose your bots\n  - start the relay and run checks\n  - let regular users connect\n\nContinue?"
 }
 W_NODE_MODE=private
 w_node() {
@@ -393,19 +450,10 @@ w_install() {
   local rc=$?; ui_detect; return "$rc"
 }
 w_agents() {
-  while true; do
-    local list; list="$(agents_js list 2>/dev/null || true)"
-    local pick
-    pick="$(ui_menu "Allowed bots now:\n$list\n\nAdd your bots exactly as named in the Grok Bot app, then remove the example 'Research Bot'. The list can never be empty." \
-      "add|Add a bot" "remove|Remove a bot" "done|Done")" || pick="done"
-    case "$pick" in
-      add) t_agents_add || true ;;
-      remove) t_agents_remove || true ;;
-      done)
-        if grep -qx "Research Bot" <<<"$list" && ! ui_yesno "The example 'Research Bot' is still listed. Continue anyway?"; then continue; fi
-        return 0 ;;
-    esac
-  done
+  t_agents_pick || true
+  local list; list="$(agents_js list 2>/dev/null || true)"
+  if grep -qx "Research Bot" <<<"$list" && ui_yesno "The example 'Research Bot' is still listed. Pick again?"; then t_agents_pick || true; fi
+  return 0
 }
 w_login()  { ui_yesno "Sign in to Cursor now? (needed before the relay can reach your bots)" && t_login; return 0; }
 w_start()  { ui_yesno "Start the relay now?" && ui_run "start" cmd_svc start; return 0; }
@@ -424,8 +472,8 @@ WIZARD_STEPS=(
   "welcome|Welcome|w_welcome"
   "node|Node runtime|w_node"
   "install|Install service|w_install"
-  "agents|Bot names|w_agents"
-  "login|⚿  Cursor login|w_login"
+  "login|Cursor login|w_login"
+  "agents|Choose bots|w_agents"
   "start|Start|w_start"
   "doctor|Doctor|w_doctor"
   "users|Group users|w_users"

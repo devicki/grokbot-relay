@@ -119,7 +119,7 @@ claude plugin install grokbot-relay@dev-toolkit
 
 - [gum](https://github.com/charmbracelet/gum)으로 만들었습니다. `install`이 gum 공식 릴리스(x64/arm64)를 받아 `checksums.txt`로 검증하고 `/opt/grokbot-relay/bin/gum`에 둡니다. Node 런타임처럼 전역 PATH에는 넣지 않습니다. 받기에 실패하면 whiptail이나 번호 메뉴로 동작합니다.
 - 어두운 네온 스타일: 보라·청록 강조색, 둥근 테두리, 상태 헤더(`● online · 포트 · 봇 수 · 버전`). 오래 걸리는 단계는 스피너를 보여 주고, 마법사는 `[n/8]`과 진행 막대를 보여 줍니다.
-- 처음 실행(설치 전)에는 **설치 마법사**를 권합니다: 환영 → Node 런타임 → 설치 → 봇 이름(내 봇 추가, 예시 `Research Bot` 삭제, 빈 목록 불가) → Cursor 로그인(링크 표시) → 시작 → doctor → 그룹 사용자. `sudo grokbot-relay install --tui`로 바로 열 수 있습니다.
+- 처음 실행(설치 전)에는 **설치 마법사**를 권합니다: 환영 → Node 런타임 → 설치 → Cursor 로그인(링크 표시) → 봇 선택(현재 이름이 미리 체크된 다중 선택 + 직접 입력, 빈 목록 불가) → 시작 → doctor → 그룹 사용자. `sudo grokbot-relay install --tui`로 바로 열 수 있습니다.
 - 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇 · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK/Node 런타임 · 설치 마법사 · Claude Code 연결 · 정보 · 삭제(`YES` 입력).
 - `grokbot-relay --plain` 또는 `NO_COLOR=1`은 색 없는 번호 메뉴를 씁니다. 모든 하위 명령은 대화창 없이 그대로 동작합니다.
 - 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
@@ -140,6 +140,7 @@ claude plugin install grokbot-relay@dev-toolkit
 | `bdk-check` | 불필요 | 설치된 `@cursor/bdk`와 npm 최신 버전 비교, 링크 표시 |
 | `bdk-upgrade [--pin]` | 필요 | `/opt`에서 `npm install @cursor/bdk@latest`, `bdk validate` 통과 시에만 재시작, 실패하면 되돌림. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함 |
 | `agents list` | 그룹 | 허용된 이름 |
+| `agents pick` | 필요 | 현재 이름(미리 체크)의 다중 선택 + 직접 입력. Grok Bot 계정의 봇 목록은 **가져올 수 없습니다**: @cursor/bdk에 목록 조회 경로가 없어서, 아직 넣지 않은 이름은 직접 입력해야 합니다. 터미널에서 이름 없이 `agents add`를 실행하면 같은 선택 화면이 열립니다 |
 | `agents add NAME`, `agents remove NAME`, `agents edit` | 필요 | `agents.json` 수정 후 재시작. 빈 목록은 거부 |
 | `doctor` | root 권장 | node, 파일과 권한, 서비스, 127.0.0.1 포트, 로그인(`bdk whoami`), bdk 버전 |
 | `connect-claude [--scope user\|local]` | 불필요 (grokbot 그룹) | Claude Code에 중계 등록 |

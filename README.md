@@ -119,7 +119,7 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open the menu.
 
 - Built on [gum](https://github.com/charmbracelet/gum). `install` downloads the official gum release (x64/arm64), verifies `checksums.txt`, and puts it in `/opt/grokbot-relay/bin/gum`, off the global PATH like the Node runtime. If that fails, the menu falls back to whiptail or plain prompts.
 - Dark neon look: violet/cyan accents, rounded borders, and a status header (`● online · port · bots · version`). Long steps show a spinner. Wizard steps show `[n/8]` with a progress bar.
-- First run (not installed yet) offers the **setup wizard**: welcome → Node runtime → install → bot names (add yours, remove the example `Research Bot`; the list can't be empty) → Cursor login (prints the sign-in link) → start → doctor → group users. `sudo grokbot-relay install --tui` opens it directly.
+- First run (not installed yet) offers the **setup wizard**: welcome → Node runtime → install → Cursor login (prints the sign-in link) → choose bots (multi-select with your current names pre-checked, plus manual entry; the list can't be empty) → start → doctor → group users. `sudo grokbot-relay install --tui` opens it directly.
 - Main menu: Status · Start/stop/restart/logs · Bots · Cursor login · Doctor · Update · Cursor BDK/Node runtime · Setup wizard · Connect Claude Code · About · Uninstall (type `YES`).
 - `grokbot-relay --plain` or `NO_COLOR=1` gives plain prompts without colors. Every subcommand still works non-interactively.
 - Adding a menu item is one line in `bin/lib/tui.sh` (`"id|label|function"` in `MAIN_MENU`, `WIZARD_STEPS`, …).
@@ -140,6 +140,7 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open the menu.
 | `bdk-check` | no | installed vs npm latest `@cursor/bdk`, with links |
 | `bdk-upgrade [--pin]` | yes | `npm install @cursor/bdk@latest` in `/opt`, `bdk validate`, restart only if it passes, else roll back. `--pin` writes `relay/package*.json` into the source clone so you can open a PR |
 | `agents list` | group | allowed names |
+| `agents pick` | yes | multi-select of the current names (pre-checked) plus manual names. The Grok Bot account list is **not** available: @cursor/bdk has no list route, so names you have not added yet must be typed. `agents add` with no name on a terminal opens the same picker |
 | `agents add NAME`, `agents remove NAME`, `agents edit` | yes | change `agents.json` and restart; an empty list is refused |
 | `doctor` | best as root | node, files and permissions, service, port on 127.0.0.1, login (`bdk whoami`), bdk version |
 | `connect-claude [--scope user\|local]` | no (grokbot group) | register the relay in Claude Code |

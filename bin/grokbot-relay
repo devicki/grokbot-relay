@@ -451,6 +451,35 @@ console.log(`${op === "add" ? "added" : "removed"}: ${nm}`);
 JS
 }
 
+# Replace the allowlist with the names on stdin (one per line); keeps existing descriptions.
+agents_set() {
+  local names; names="$(cat)"
+  node - "$AGENTS_FILE" "$names" <<'JS'
+const fs = require("fs");
+const file = process.argv[2];
+let old = { agents: [] };
+try { old = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
+const desc = new Map((old.agents || []).map((a) => (typeof a === "string" ? [a, undefined] : [a.name, a.description])));
+const names = [...new Set((process.argv[3] || "").split("\n").map((s) => s.trim()).filter((s) => s && s !== "*"))];
+if (!names.length) { console.error("refusing to save an empty list"); process.exit(2); }
+const agents = names.map((n) => (desc.get(n) ? { name: n, description: desc.get(n) } : { name: n }));
+fs.writeFileSync(file, JSON.stringify({ ...old, agents }, null, 2) + "\n");
+console.log(`saved ${names.length} bot(s): ${names.join(", ")}`);
+JS
+  chown root:"$SVC_USER" "$AGENTS_FILE"; chmod 640 "$AGENTS_FILE"
+}
+
+# List the bots on the signed-in Cursor account.
+# Not possible today: @cursor/bdk 0.2.25 talks to Grok Bot only through the
+# /v0/grokbot session routes (create-or-get a session by name, send, read
+# entries, interrupt) and grokbot__list returns only configured and already
+# contacted names. There is no account-wide list route. Kept as one hook so a
+# future listing API slots in here (print one name per line, return 0).
+fetch_account_bots() {
+  echo "Your Grok Bot list can't be read through Cursor's API yet (@cursor/bdk $(installed_bdk) has no list route). Type names exactly as shown in the Grok Bot app." >&2
+  return 1
+}
+
 agents_check_nonempty() {
   node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const n=(d.agents||[]).map(a=>typeof a==="string"?a:a&&a.name).filter(x=>x&&x.trim()&&x!=="*");if(!n.length){process.exit(1)}' "$AGENTS_FILE"
 }
@@ -461,9 +490,14 @@ cmd_agents() {
     list)
       [[ -r "$AGENTS_FILE" ]] || die "Cannot read $AGENTS_FILE (need root or grokbot group)."
       agents_js list ;;
+    pick)
+      need_root "agents pick"
+      [[ -t 0 && -t 1 ]] || die "agents pick needs a terminal; use: agents add NAME"
+      load_tui; t_agents_pick ;;
     add|remove)
       need_root "agents $sub"
-      [[ -n "${1:-}" ]] || die "usage: grokbot-relay agents $sub \"<name>\""
+      if [[ -z "${1:-}" && "$sub" == add && -t 0 && -t 1 ]]; then load_tui; t_agents_pick; return; fi
+      [[ -n "${1:-}" ]] || die "usage: grokbot-relay agents $sub \"<name>\"   (or: agents pick)"
       local rc=0; agents_js "$sub" "$1" || rc=$?
       (( rc == 3 )) && return 0
       (( rc == 0 )) || exit "$rc"
@@ -482,7 +516,7 @@ cmd_agents() {
       install -o root -g "$SVC_USER" -m 640 "$tmp" "$AGENTS_FILE"; rm -f "$tmp"
       info "Saved $AGENTS_FILE."
       restart_if_active ;;
-    *) die "usage: grokbot-relay agents list|add NAME|remove NAME|edit" ;;
+    *) die "usage: grokbot-relay agents list|pick|add [NAME]|remove NAME|edit" ;;
   esac
 }
 
@@ -665,7 +699,8 @@ Service (root, except status/logs)
   enable | disable          start at boot or not
 Agents
   agents list               show allowed bot names
-  agents add NAME           add a name (root), restarts if running
+  agents pick               choose bots in a multi-select, plus manual entry (root, terminal)
+  agents add [NAME]         add a name (root), restarts if running; no NAME on a terminal = pick
   agents remove NAME        remove a name (root); the last one cannot be removed
   agents edit               edit agents.json in $EDITOR (root), validated before saving
 BDK

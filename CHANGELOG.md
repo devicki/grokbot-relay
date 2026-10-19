@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.3
+- Wizard order: Cursor login now comes before choosing bots.
+- New bot picker (`agents pick`, wizard step, TUI Bots menu, and `agents add` with no name on a terminal): multi-select with current names pre-checked (gum / whiptail checklist / plain numbers) plus comma-separated manual entry; never saves an empty list.
+- Listing the account's Grok Bots is not possible: @cursor/bdk 0.2.25 reaches Grok Bot only through `/v0/grokbot` session routes (get-or-create by name, send, entries, interrupt) and `grokbot__list` returns only configured/contacted names. `fetch_account_bots` is a single hook for a future listing API; the picker says so and falls back to manual entry.
+
 ## 0.7.2
 - Default port 47800 (was 3000, often taken). `install` checks with `ss -ltn` and uses the next free port with a message; the wizard pre-fills the free port and re-checks your choice. A configured port is kept on update/reinstall (`--port` is then ignored with a note).
 - `doctor` reports when the port is taken by another program and suggests a free one. README, `.mcp.json.example` and demo values updated.
