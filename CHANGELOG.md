@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+- Private Node runtime: `install` downloads the official Node 24 linux tarball (x64/arm64) from nodejs.org, verifies SHASUMS256, extracts to `/opt/grokbot-relay/node`. Never on the global PATH; the CLI and the systemd unit (`Environment=PATH=...`) use it. No Node needed beforehand (curl, tar, sha256sum only).
+- `install --node system` to use an existing system node 22+. Runtime recorded in `/etc/grokbot-relay/runtime`.
+- `node-upgrade` (CLI and TUI): refresh to the latest 24.x, roll back if `bdk validate` fails. `update` keeps the runtime.
+- `connect-claude` runs the relay's Node + installed bdk (`/opt/grokbot-relay/relay/node_modules/.bin/bdk`) instead of `npx`, so users need no Node or nvm for the relay. Relay files are group-readable for `grokbot`.
+- `doctor` shows the runtime path and version; `uninstall` lists the runtime (removed with `/opt`).
+
 ## 0.5.2
 - `grokbot-relay uninstall [--purge|--keep-config] [-y]`: stops/disables and removes the service, `/opt/grokbot-relay`, the CLI link and the recorded source path; asks before config, Cursor login/state and the grokbot user. Never touches the source clone. TUI entry with a danger confirmation (type YES).
 

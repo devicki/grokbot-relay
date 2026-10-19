@@ -17,7 +17,7 @@ Claude Code / Cursor ──stdio──> bdk mcp ──HTTP (127.0.0.1)──> bd
 
 ## Install (local)
 
-Requires Node.js 22+.
+Local (non-service) use requires Node.js 22+ on your PATH; the server install below brings its own Node.
 
 ```bash
 cd relay
@@ -72,7 +72,6 @@ One server, one service account `grokbot`, several users. An admin (root) instal
 Admin (root):
 
 ```bash
-node -v                                   # v22+
 git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
 sudo ./bin/grokbot-relay install --tui    # wizard; or non-interactive: install [--port N]
 sudo grokbot-relay agents add "Feedhand"  # your bot names, exactly as in the app (or: agents edit)
@@ -102,6 +101,14 @@ claude plugin marketplace add devicki/dev-toolkit
 claude plugin install grokbot-relay@dev-toolkit
 ```
 
+### Node runtime
+
+The relay brings its **own Node 24** in `/opt/grokbot-relay/node`: `install` downloads the official linux tarball (x64/arm64) from nodejs.org, checks it against `SHASUMS256.txt`, and extracts it there. It is **never added to the global PATH**, so other accounts' Node (nvm, etc.) is untouched; only the CLI and the systemd unit (`Environment=PATH=/opt/grokbot-relay/node/bin:/usr/bin:/bin`) use it. The installer needs only `curl`, `tar` and `sha256sum`.
+
+- `sudo grokbot-relay node-upgrade` refreshes it to the latest 24.x (rolls back if `bdk validate` fails). `update` keeps it.
+- `install --node system` uses an existing system node 22+ instead.
+- `connect-claude` registers `/opt/grokbot-relay/node/bin/node` + the installed `bdk` from `/opt/grokbot-relay/relay`, so regular users need no Node of their own for the relay (group `grokbot` has read/execute).
+
 ## TUI
 
 Run `sudo grokbot-relay` (no arguments) on a terminal to open a menu. It uses `whiptail` or `dialog` if installed (`sudo apt install whiptail`), otherwise numbered prompts.
@@ -117,12 +124,13 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open a menu. It uses `w
 
 | Command | Root | What |
 |---|---|---|
-| `install [--port N] [--tui]` | yes | user, `/opt` app, `npm ci`, env (token made once), `agents.json` (from example if missing), systemd unit enabled but not started |
+| `install [--port N] [--node private\|system] [--tui]` | yes | user, `/opt` app, `npm ci`, env (token made once), `agents.json` (from example if missing), systemd unit enabled but not started |
 | `login` | yes | `bdk login` as the grokbot user |
 | `start`, `stop`, `restart` | yes | control the service |
 | `status`, `logs [-f]` | no | `systemctl status`, `journalctl` |
 | `enable`, `disable` | yes | start at boot or not |
 | `update` | yes | `git pull --ff-only` in the source clone, recopy, `npm ci`, restart; env and `agents.json` kept |
+| `node-upgrade` | yes | refresh the private Node runtime to the latest 24.x |
 | `bdk-check` | no | installed vs npm latest `@cursor/bdk`, with links |
 | `bdk-upgrade [--pin]` | yes | `npm install @cursor/bdk@latest` in `/opt`, `bdk validate`, restart only if it passes, else roll back. `--pin` writes `relay/package*.json` into the source clone so you can open a PR |
 | `agents list` | group | allowed names |

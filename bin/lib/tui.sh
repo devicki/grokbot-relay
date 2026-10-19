@@ -119,6 +119,7 @@ t_login()    { ui_root_or_msg || return 1
   ui_msg "Cursor sign-in as the grokbot user.\n\nA sign-in link will be printed. Open it in any browser (another computer is fine), finish signing in, and the command returns."
   ui_shell "bdk login" cmd_login; }
 t_update()   { ui_root_or_msg && ui_yesno "Pull the source clone, recopy, npm ci and restart?\nenv and agents.json are kept." && ui_run "update" cmd_update; }
+t_node_up()  { ui_root_or_msg && ui_yesno "Refresh the private Node runtime to the latest $NODE_MAJOR.x?\nSHA256-checked; rolls back if validation fails." && ui_run "node-upgrade" cmd_node_upgrade; }
 t_bdk_check(){ ui_run "bdk-check" cmd_bdk_check; }
 t_bdk_up()   { ui_root_or_msg && ui_yesno "Upgrade @cursor/bdk to the latest version?\nIt is validated first; on failure it rolls back." && ui_run "bdk-upgrade" cmd_bdk_upgrade; }
 t_doctor()   { ui_run "doctor" cmd_doctor; }
@@ -181,9 +182,10 @@ t_service() { ui_loop "Service control" SERVICE_MENU; }
 BDK_MENU=(
   "check|Check for a newer @cursor/bdk|t_bdk_check"
   "upgrade|Upgrade @cursor/bdk (validate, rollback on failure)|t_bdk_up"
+  "node|Refresh private Node runtime (latest 24.x)|t_node_up"
   "back|Back|back"
 )
-t_bdk() { ui_loop "Cursor BDK" BDK_MENU; }
+t_bdk() { ui_loop "Cursor BDK and Node runtime" BDK_MENU; }
 
 MAIN_MENU=(
   "status|Status|t_status"
@@ -192,7 +194,7 @@ MAIN_MENU=(
   "login|Cursor login|t_login"
   "doctor|Doctor (health check)|t_doctor"
   "update|Update grokbot-relay|t_update"
-  "bdk|Cursor BDK check / upgrade|t_bdk"
+  "bdk|Cursor BDK / Node runtime|t_bdk"
   "wizard|Run setup wizard again|tui_wizard"
   "connect|Connect Claude Code (info)|t_connect"
   "about|About / version|t_about"
@@ -202,10 +204,21 @@ MAIN_MENU=(
 
 # ---------------------------------------------------------------- wizard
 w_welcome() {
-  ui_yesno "Welcome to grokbot-relay $(read_version "$(script_root)").\n\nThis wizard will:\n  - check Node.js\n  - install the service (user, /opt app, env, systemd)\n  - set your bot names\n  - sign in to Cursor\n  - start the relay and run checks\n  - let regular users connect\n\nContinue?"
+  ui_yesno "Welcome to grokbot-relay $(read_version "$(script_root)").\n\nThis wizard will:\n  - choose the Node runtime (private by default)\n  - install the service (user, /opt app, env, systemd)\n  - set your bot names\n  - sign in to Cursor\n  - start the relay and run checks\n  - let regular users connect\n\nContinue?"
 }
+W_NODE_MODE=private
 w_node() {
-  local out; if out="$( (check_node) 2>&1 )"; then ui_msg "Node.js $(node -v): OK"; else ui_msg "$out\n\nInstall Node.js 22+ and run the wizard again."; return 1; fi
+  local sys; sys="$(PATH=/usr/local/bin:/usr/bin:/bin command -v node || true)"
+  if [[ -n "$sys" ]]; then
+    local pick
+    pick="$(ui_menu "Node runtime for the relay.\nA system node was found: $sys ($("$sys" -v))." \
+      "private|Private Node $NODE_MAJOR (recommended; in $NODE_DIR, not on global PATH)" \
+      "system|Use the system node (needs 22+)")" || return 1
+    W_NODE_MODE="$pick"
+  else
+    W_NODE_MODE=private
+    ui_msg "The relay will use a private Node $NODE_MAJOR runtime in $NODE_DIR.\nIt is downloaded from nodejs.org, SHA256-checked, and never added to the global PATH, so other accounts' Node (nvm etc.) is unaffected.\n\nNeeds: curl, tar, sha256sum."
+  fi
 }
 w_install() {
   local port=3000 cur
@@ -216,7 +229,7 @@ w_install() {
     port="$(ui_input "Port for the relay (listens on 127.0.0.1 only):" "$port")" || return 1
     [[ "$port" =~ ^[0-9]+$ ]] || { ui_msg "Invalid port."; return 1; }
   fi
-  ui_run "install" cmd_install --port "$port"
+  ui_run "install" cmd_install --port "$port" --node "$W_NODE_MODE"
 }
 w_agents() {
   while true; do
@@ -248,7 +261,7 @@ w_users() {
 # Wizard steps: "id|label|function". Add a step = add one line.
 WIZARD_STEPS=(
   "welcome|Welcome|w_welcome"
-  "node|Node.js check|w_node"
+  "node|Node runtime|w_node"
   "install|Install service|w_install"
   "agents|Bot names|w_agents"
   "login|Cursor login|w_login"

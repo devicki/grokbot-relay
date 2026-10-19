@@ -11,6 +11,10 @@ ENV_DIR=/etc/grokbot-relay
 ENV_FILE="$ENV_DIR/env"
 AGENTS_FILE="$ENV_DIR/agents.json"
 SOURCE_FILE="$ENV_DIR/source"
+RUNTIME_FILE="$ENV_DIR/runtime"   # NODE_MODE=private|system, NODE_BIN_DIR=... (not secret)
+NODE_DIR="$APP_DIR/node"
+NODE_MAJOR=24
+NODE_DIST="https://nodejs.org/dist/latest-v$NODE_MAJOR.x"
 UNIT_NAME=grokbot-relay.service
 UNIT="/etc/systemd/system/$UNIT_NAME"
 SVC_USER=grokbot
@@ -27,16 +31,89 @@ script_root() { cd "$(self_dir)/.." && pwd; }
 
 read_version() { local f="$1/VERSION"; [[ -f "$f" ]] && tr -d ' \n' < "$f" || echo unknown; }
 
-as_svc() { sudo -u "$SVC_USER" -H bash -c "$1"; }
+as_svc() { sudo -u "$SVC_USER" -H env PATH="$PATH" bash -c "$1"; }
 
 env_value() { # never print the token; only used internally
   sed -n "s/^$1=//p" "$ENV_FILE" | head -n1
 }
 
-check_node() {
-  command -v node >/dev/null || die "Node.js 22+ is required (not found)."
-  local major; major="$(node -p 'process.versions.node.split(".")[0]')"
-  (( major >= 22 )) || die "Node.js 22+ is required (found $(node -v))."
+# ---------------------------------------------------------------- node runtime
+# A private Node runtime in $NODE_DIR is used by default and never added to the
+# global PATH, so other accounts (nvm etc.) are unaffected. Only this script and
+# the systemd unit put it first on PATH.
+runtime_bin_dir() {
+  local d=""
+  if [[ -r "$RUNTIME_FILE" ]]; then d="$(sed -n 's/^NODE_BIN_DIR=//p' "$RUNTIME_FILE" | head -n1)"; fi
+  if [[ -z "$d" && -x "$NODE_DIR/bin/node" ]]; then d="$NODE_DIR/bin"; fi
+  echo "$d"
+}
+RT_BIN="$(runtime_bin_dir)"
+[[ -n "$RT_BIN" ]] && export PATH="$RT_BIN:$PATH"
+
+node_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo x64 ;;
+    aarch64|arm64) echo arm64 ;;
+    *) die "Unsupported CPU $(uname -m) for the private Node runtime. Use --node system." ;;
+  esac
+}
+
+need_tools() { local t; for t in "$@"; do command -v "$t" >/dev/null || die "'$t' is required. Install it (e.g. sudo apt install $t)."; done; }
+
+node_latest_file() { # prints tarball name of latest $NODE_MAJOR.x for this arch; SHASUMS kept in $1
+  curl -fsSL "$NODE_DIST/SHASUMS256.txt" -o "$1/SHASUMS256.txt" || die "Cannot download $NODE_DIST/SHASUMS256.txt"
+  grep -oE "node-v$NODE_MAJOR\.[0-9]+\.[0-9]+-linux-$(node_arch)\.tar\.gz" "$1/SHASUMS256.txt" | head -n1
+}
+
+node_fetch() { # $1 = target dir; downloads, verifies SHA256, extracts
+  need_tools curl tar sha256sum
+  local target="$1" tmp file
+  tmp="$(mktemp -d)"
+  file="$(node_latest_file "$tmp")"
+  [[ -n "$file" ]] || { rm -rf "$tmp"; die "No Node $NODE_MAJOR.x tarball for $(node_arch) in SHASUMS256.txt"; }
+  info "Downloading $file from nodejs.org"
+  curl -fsSL "$NODE_DIST/$file" -o "$tmp/$file" || { rm -rf "$tmp"; die "Download failed: $file"; }
+  ( cd "$tmp" && grep " $file\$" SHASUMS256.txt | sha256sum -c --status - ) || { rm -rf "$tmp"; die "SHA256 check FAILED for $file"; }
+  info "SHA256 verified."
+  tar -xzf "$tmp/$file" -C "$tmp"
+  rm -rf "$target"
+  mv "$tmp/${file%.tar.gz}" "$target"
+  rm -rf "$tmp"
+  chown -R root:"$SVC_USER" "$target"
+  chmod -R g+rX,o-w "$target"
+}
+
+write_runtime() { # mode bindir
+  install -d -o root -g "$SVC_USER" -m 750 "$ENV_DIR"
+  printf 'NODE_MODE=%s\nNODE_BIN_DIR=%s\n' "$1" "$2" > "$RUNTIME_FILE"
+  chown root:"$SVC_USER" "$RUNTIME_FILE"; chmod 644 "$RUNTIME_FILE"
+  RT_BIN="$2"; export PATH="$2:$PATH"
+}
+
+setup_runtime() { # mode = private|system
+  if [[ "$1" == system ]]; then
+    local sys; sys="$(PATH=/usr/local/bin:/usr/bin:/bin command -v node || true)"
+    [[ -n "$sys" ]] || die "--node system: no node in /usr/local/bin, /usr/bin or /bin."
+    local major; major="$("$sys" -p 'process.versions.node.split(".")[0]')"
+    (( major >= 22 )) || die "--node system: Node 22+ required (found $("$sys" -v))."
+    write_runtime system "$(dirname "$(readlink -f "$sys")")"
+    info "Using system Node $("$sys" -v) ($sys)."
+  else
+    if [[ -x "$NODE_DIR/bin/node" ]]; then
+      info "Keeping private Node $("$NODE_DIR/bin/node" -v) in $NODE_DIR (refresh: grokbot-relay node-upgrade)."
+    else
+      install -d -m 755 "$APP_DIR"
+      node_fetch "$NODE_DIR"
+      info "Installed private Node $("$NODE_DIR/bin/node" -v) in $NODE_DIR (not on the global PATH)."
+    fi
+    write_runtime private "$NODE_DIR/bin"
+  fi
+}
+
+install_unit() { # $1 = source root
+  local p="$RT_BIN:/usr/bin:/bin"
+  sed "s|^Environment=PATH=.*|Environment=PATH=$p|" "$1/deploy/$UNIT_NAME" > "$UNIT"
+  chown root:root "$UNIT"; chmod 644 "$UNIT"
 }
 
 installed_bdk() {
@@ -47,7 +124,7 @@ installed_bdk() {
 copy_app() { # $1 = source repo root
   local src="$1"
   [[ -d "$src/relay" ]] || die "$src does not look like a grokbot-relay clone (no relay/)."
-  install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$APP_DIR"
+  install -d -m 755 "$APP_DIR"
   local new="$APP_DIR/relay.new"
   rm -rf "$new"
   cp -a "$src/relay" "$new"
@@ -59,8 +136,12 @@ copy_app() { # $1 = source repo root
   rm -rf "${APP_DIR:?}/deploy" && cp -a "$src/deploy" "$APP_DIR/deploy"
   cp "$src/VERSION" "$APP_DIR/VERSION"
   cp "$src/agents.example.json" "$APP_DIR/agents.example.json"
-  chown -R "$SVC_USER:$SVC_USER" "$APP_DIR"
-  chmod 755 "$APP_DIR" "$APP_DIR/bin" "$APP_DIR/bin/grokbot-relay"
+  chown root:root "$APP_DIR"; chmod 755 "$APP_DIR"
+  chown -R root:root "$APP_DIR/bin" "$APP_DIR/deploy" "$APP_DIR/VERSION" "$APP_DIR/agents.example.json"
+  chmod -R go+rX,go-w "$APP_DIR/bin" "$APP_DIR/deploy"
+  # relay: owned by the service user, readable by the grokbot group (connect-claude runs bdk from here)
+  chown -R "$SVC_USER:$SVC_USER" "$RELAY_DIR"
+  chmod -R g+rX,g-w,o-rwx "$RELAY_DIR"
 }
 
 NPM_ENV="NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false"
@@ -101,10 +182,11 @@ restart_if_active() {
 # ---------------------------------------------------------------- install
 cmd_install() {
   need_root install
-  local port=3000
+  local port=3000 node_mode=private
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --port) port="${2:?--port needs a number}"; shift 2 ;;
+      --node) node_mode="${2:?--node needs private or system}"; shift 2 ;;
       --tui) load_tui; tui_wizard; return ;;
       *) die "install: unknown option $1" ;;
     esac
@@ -112,13 +194,15 @@ cmd_install() {
   local src; src="$(script_root)"
   [[ "$src" == "$APP_DIR" ]] && [[ -f "$SOURCE_FILE" ]] && src="$(cat "$SOURCE_FILE")"
 
-  check_node
+  [[ "$node_mode" == private || "$node_mode" == system ]] || die "--node must be private or system."
 
   getent group "$SVC_USER" >/dev/null || groupadd --system "$SVC_USER"
   if ! id "$SVC_USER" >/dev/null 2>&1; then
     useradd --system --gid "$SVC_USER" --home-dir "$HOME_DIR" --create-home --shell /usr/sbin/nologin "$SVC_USER"
   fi
   install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$HOME_DIR" "$HOME_DIR/state"
+
+  setup_runtime "$node_mode"
 
   info "Copying relay from $src to $APP_DIR"
   copy_app "$src"
@@ -146,7 +230,7 @@ cmd_install() {
 
   printf '%s\n' "$src" > "$SOURCE_FILE"; chmod 644 "$SOURCE_FILE"
 
-  install -o root -g root -m 644 "$src/deploy/$UNIT_NAME" "$UNIT"
+  install_unit "$src"
   systemctl daemon-reload
   systemctl enable "$UNIT_NAME" >/dev/null
   ln -sf "$APP_DIR/bin/grokbot-relay" /usr/local/bin/grokbot-relay
@@ -188,6 +272,7 @@ cmd_update() {
   [[ -f "$SOURCE_FILE" ]] || die "No source recorded ($SOURCE_FILE). Re-run install from your clone."
   local src old new
   src="$(cat "$SOURCE_FILE")"
+  [[ -n "$RT_BIN" && -x "$RT_BIN/node" ]] || die "Node runtime missing. Re-run: sudo grokbot-relay install (or node-upgrade)."
   [[ -d "$src/.git" ]] || die "$src is not a git clone."
   old="$(read_version "$APP_DIR")"
   local owner; owner="$(stat -c %U "$src")"
@@ -196,7 +281,7 @@ cmd_update() {
   new="$(read_version "$src")"
   copy_app "$src"
   npm_ci
-  install -o root -g root -m 644 "$src/deploy/$UNIT_NAME" "$UNIT"
+  install_unit "$src"
   systemctl daemon-reload
   info "Kept $ENV_FILE and $AGENTS_FILE."
   restart_if_active
@@ -267,6 +352,33 @@ To share this bump upstream:
 UP
 }
 
+# ---------------------------------------------------------------- node-upgrade
+cmd_node_upgrade() {
+  need_root node-upgrade
+  if [[ -r "$RUNTIME_FILE" ]] && grep -q '^NODE_MODE=system' "$RUNTIME_FILE"; then
+    die "This install uses the system Node ($RT_BIN). Upgrade it with your package manager, or reinstall with --node private."
+  fi
+  need_tools curl tar sha256sum
+  local cur latest tmp
+  cur="$([[ -x "$NODE_DIR/bin/node" ]] && "$NODE_DIR/bin/node" -v || echo none)"
+  tmp="$(mktemp -d)"; latest="$(node_latest_file "$tmp")"; rm -rf "$tmp"
+  latest="${latest#node-}"; latest="${latest%%-linux*}"
+  echo "private Node: $cur   latest $NODE_MAJOR.x: $latest"
+  if [[ "$cur" == "$latest" ]]; then echo "Up to date."; return 0; fi
+  node_fetch "$NODE_DIR.new"
+  rm -rf "$NODE_DIR.old"; [[ -d "$NODE_DIR" ]] && mv "$NODE_DIR" "$NODE_DIR.old"
+  mv "$NODE_DIR.new" "$NODE_DIR"
+  write_runtime private "$NODE_DIR/bin"
+  if [[ -d "$RELAY_DIR/node_modules" ]]; then npm_rebuild; fi
+  if [[ -d "$RELAY_DIR/node_modules" ]] && ! validate_relay >/dev/null 2>&1; then
+    echo "bdk validate failed on the new Node; rolling back to $cur." >&2
+    rm -rf "$NODE_DIR"; mv "$NODE_DIR.old" "$NODE_DIR"; npm_rebuild; exit 1
+  fi
+  rm -rf "$NODE_DIR.old"
+  info "Node: $cur -> $("$NODE_DIR/bin/node" -v)"
+  restart_if_active
+}
+
 # ---------------------------------------------------------------- agents
 agents_js() { # $1 = op, $2 = name
   node - "$AGENTS_FILE" "$1" "${2:-}" <<'JS'
@@ -334,10 +446,12 @@ cmd_doctor() {
   note() { echo "  [info] $*"; }
   echo "grokbot-relay $(read_version "$APP_DIR") doctor"
 
-  if command -v node >/dev/null; then
-    local m; m="$(node -p 'process.versions.node.split(".")[0]')"
-    (( m >= 22 )) && pass "node $(node -v)" || bad "node $(node -v) (need 22+)"
-  else bad "node not found"; fi
+  if [[ -n "$RT_BIN" && -x "$RT_BIN/node" ]]; then
+    local m mode=private; m="$("$RT_BIN/node" -p 'process.versions.node.split(".")[0]')"
+    [[ -r "$RUNTIME_FILE" ]] && grep -q '^NODE_MODE=system' "$RUNTIME_FILE" && mode=system
+    (( m >= 22 )) && pass "node $("$RT_BIN/node" -v) ($mode runtime: $RT_BIN)" || bad "node $("$RT_BIN/node" -v) at $RT_BIN (need 22+)"
+    [[ $mode == private ]] && note "private runtime is not on the global PATH (by design); refresh: sudo grokbot-relay node-upgrade"
+  else bad "Node runtime not found (sudo grokbot-relay install)"; fi
 
   [[ -d "$RELAY_DIR/node_modules" ]] && pass "app installed in $RELAY_DIR" || bad "app not installed (sudo grokbot-relay install)"
   note "$NPM_PKG $(installed_bdk) (latest check: grokbot-relay bdk-check)"
@@ -405,6 +519,7 @@ cmd_uninstall() {
   echo "  - $APP_DIR"
   echo "  - /usr/local/bin/grokbot-relay"
   echo "  - $SOURCE_FILE"
+  echo "  - private Node runtime $NODE_DIR (inside $APP_DIR)"
   if (( purge )); then
     echo "  - $ENV_DIR (token, agents.json)"
     echo "  - $HOME_DIR (Cursor login, state)"
@@ -462,11 +577,14 @@ cmd_connect_claude() {
   command -v claude >/dev/null || die "Claude Code (claude) not found."
   [[ -r "$ENV_FILE" ]] || die "Cannot read $ENV_FILE. Ask the admin: sudo usermod -aG $SVC_USER $USER (then log in again)."
   [[ -n "$(env_value GROKBOT_RELAY_PORT)" && -n "$(env_value GROKBOT_RELAY_TOKEN)" ]] || die "$ENV_FILE is missing values."
+  [[ -n "$RT_BIN" && -x "$RT_BIN/node" ]] || die "Relay Node runtime not readable ($RUNTIME_FILE). Ask the admin to run: sudo grokbot-relay doctor"
+  [[ -r "$RELAY_DIR/node_modules/.bin/bdk" ]] || die "Cannot read $RELAY_DIR/node_modules (need grokbot group; log out and back in after usermod)."
   claude mcp remove grokbot --scope "$scope" >/dev/null 2>&1 || true
+  # Uses the relay's own Node runtime and installed bdk, so it does not depend on your nvm/PATH.
   # The token is read from the env file each time the server starts; it is not stored in Claude Code's config.
   # shellcheck disable=SC2016
   claude mcp add grokbot --scope "$scope" -- bash -c \
-    'set -a; . /etc/grokbot-relay/env; set +a; exec npx -y @cursor/bdk mcp --url "http://127.0.0.1:${GROKBOT_RELAY_PORT}" --bearer-token "${GROKBOT_RELAY_TOKEN}"'
+    '. /etc/grokbot-relay/runtime; set -a; . /etc/grokbot-relay/env; set +a; exec "${NODE_BIN_DIR}/node" /opt/grokbot-relay/relay/node_modules/.bin/bdk mcp --url "http://127.0.0.1:${GROKBOT_RELAY_PORT}" --bearer-token "${GROKBOT_RELAY_TOKEN}"'
   echo "Registered MCP server 'grokbot' (scope: $scope). Check with: claude mcp list"
 }
 
@@ -481,7 +599,10 @@ grokbot-relay: install and operate the Grok Bot relay (Cursor BDK) service
 
 Setup (root)
   (no args) | tui           open the menu (TUI) on a terminal; uses whiptail/dialog if present
-  install [--port N] [--tui]  install or reinstall; --tui runs the setup wizard (user, /opt app, env, agents.json, systemd unit)
+  install [--port N] [--node private|system] [--tui]
+                            install or reinstall; private Node 24 runtime by default
+                            (downloaded from nodejs.org, SHA256-checked, not on global PATH);
+                            --tui runs the setup wizard
   login                     Cursor sign-in as the grokbot user (bdk login)
   update                    git pull the source clone, recopy, npm ci, restart; keeps env/agents
 Service (root, except status/logs)
@@ -495,6 +616,7 @@ Agents
   agents remove NAME        remove a name (root); the last one cannot be removed
   agents edit               edit agents.json in $EDITOR (root), validated before saving
 BDK
+  node-upgrade              refresh the private Node runtime to the latest 24.x (root)
   bdk-check                 compare installed @cursor/bdk with npm latest
   bdk-upgrade [--pin]       upgrade @cursor/bdk, validate, restart or roll back (root);
                             --pin also writes package*.json into the source clone for a PR
@@ -525,6 +647,7 @@ main() {
     agents) cmd_agents "$@" ;;
     doctor) cmd_doctor ;;
     uninstall) cmd_uninstall "$@" ;;
+    node-upgrade) cmd_node_upgrade ;;
     connect-claude) cmd_connect_claude "$@" ;;
     version|--version|-v) echo "grokbot-relay $(read_version "$(script_root)")" ;;
     help|--help|-h) cmd_help ;;

@@ -17,7 +17,7 @@ Claude Code / Cursor ──stdio──> bdk mcp ──HTTP(127.0.0.1)──> bdk
 
 ## 설치 (로컬)
 
-Node.js 22 이상이 필요합니다.
+로컬(서비스 아님) 실행은 PATH에 Node.js 22+가 필요합니다. 아래 서버 설치는 자체 Node를 씁니다.
 
 ```bash
 cd relay
@@ -72,7 +72,6 @@ claude plugin install grokbot-relay@dev-toolkit
 관리자(root):
 
 ```bash
-node -v                                   # v22 이상
 git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
 sudo ./bin/grokbot-relay install --tui    # 마법사. 비대화식: install [--port N]
 sudo grokbot-relay agents add "Feedhand"  # 내 봇 이름, 앱에 보이는 그대로 (또는 agents edit)
@@ -102,6 +101,14 @@ claude plugin marketplace add devicki/dev-toolkit
 claude plugin install grokbot-relay@dev-toolkit
 ```
 
+### Node 런타임
+
+중계는 **자체 Node 24**를 `/opt/grokbot-relay/node`에 둡니다. `install`이 nodejs.org에서 공식 linux tarball(x64/arm64)을 받아 `SHASUMS256.txt`로 검증하고 풉니다. **전역 PATH에는 절대 넣지 않으므로** 다른 계정의 Node(nvm 등)에 영향이 없습니다. CLI와 systemd 유닛(`Environment=PATH=/opt/grokbot-relay/node/bin:/usr/bin:/bin`)만 이 런타임을 씁니다. 설치에는 `curl`, `tar`, `sha256sum`만 있으면 됩니다.
+
+- `sudo grokbot-relay node-upgrade`: 최신 24.x로 교체 (`bdk validate` 실패 시 되돌림). `update`는 런타임을 유지합니다.
+- `install --node system`: 이미 있는 시스템 node 22+를 사용.
+- `connect-claude`는 `/opt/grokbot-relay/node/bin/node`와 `/opt/grokbot-relay/relay`에 설치된 `bdk`를 등록합니다. 그래서 일반 사용자는 중계용 Node가 따로 필요 없습니다(`grokbot` 그룹에 읽기·실행 권한).
+
 ## TUI
 
 터미널에서 `sudo grokbot-relay`를 인자 없이 실행하면 메뉴가 열립니다. `whiptail`이나 `dialog`가 있으면 그 화면을 쓰고(`sudo apt install whiptail`), 없으면 번호 입력 메뉴로 동작합니다.
@@ -117,12 +124,13 @@ claude plugin install grokbot-relay@dev-toolkit
 
 | 명령 | root | 내용 |
 |---|---|---|
-| `install [--port N] [--tui]` | 필요 | 계정, `/opt` 앱, `npm ci`, env(토큰은 처음 한 번만 생성), `agents.json`(없으면 예시로 생성), systemd 유닛 enable (시작은 안 함) |
+| `install [--port N] [--node private\|system] [--tui]` | 필요 | 계정, `/opt` 앱, `npm ci`, env(토큰은 처음 한 번만 생성), `agents.json`(없으면 예시로 생성), systemd 유닛 enable (시작은 안 함) |
 | `login` | 필요 | grokbot 계정으로 `bdk login` |
 | `start`, `stop`, `restart` | 필요 | 서비스 제어 |
 | `status`, `logs [-f]` | 불필요 | `systemctl status`, `journalctl` |
 | `enable`, `disable` | 필요 | 부팅 시 자동 시작 켜기·끄기 |
 | `update` | 필요 | 원본 clone에서 `git pull --ff-only`, 다시 복사, `npm ci`, 재시작. env와 `agents.json`은 유지 |
+| `node-upgrade` | 필요 | 자체 Node 런타임을 최신 24.x로 교체 |
 | `bdk-check` | 불필요 | 설치된 `@cursor/bdk`와 npm 최신 버전 비교, 링크 표시 |
 | `bdk-upgrade [--pin]` | 필요 | `/opt`에서 `npm install @cursor/bdk@latest`, `bdk validate` 통과 시에만 재시작, 실패하면 되돌림. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함 |
 | `agents list` | 그룹 | 허용된 이름 |
