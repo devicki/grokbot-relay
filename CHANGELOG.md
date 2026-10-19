@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.9
+- relay: pin `@cursor/bdk` to exactly `0.2.27` in `package.json`, with `package-lock.json` refreshed, so `update` no longer reinstalls 0.2.25 over a `bdk-upgrade`. `allowScripts` is unchanged.
+
 ## 0.7.8
 - `update`: the raw git and npm output is hidden. You get step lines (fetching, version X → Y, copy, deps, service unit, restart) with a spinner and ✓, then a short "What's new" from the CHANGELOG. A failed step prints its captured log. `-v`/`--verbose` shows the full output.
 - `bdk-upgrade`: npm runs quieter (`--loglevel=error`, step lines). The "share this bump upstream" git instructions only appear with `--dev` or `-v`/`--verbose`.
