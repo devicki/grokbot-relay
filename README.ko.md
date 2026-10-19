@@ -122,6 +122,7 @@ claude plugin install grokbot-relay@dev-toolkit
 - 처음 실행(설치 전)에는 **설치 마법사**를 권합니다: 환영 → Node 런타임 → 설치 → Cursor 로그인(링크 표시) → 봇 선택(현재 이름이 미리 체크된 다중 선택 + 직접 입력, 빈 목록 불가) → 시작 → doctor → 그룹 사용자. `sudo grokbot-relay install --tui`로 바로 열 수 있습니다.
 - 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇 · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK/Node 런타임 · 설치 마법사 · Claude Code 연결 · 정보 · 삭제(`YES` 입력).
 - `grokbot-relay --plain` 또는 `NO_COLOR=1`은 색 없는 번호 메뉴를 씁니다. 모든 하위 명령은 대화창 없이 그대로 동작합니다.
+- 위저드 키: **Esc** = 이전 단계 (1단계에서는 종료 확인) · **Ctrl+C** = 확인 후 종료 (다음 단계로 넘어가지 않음). plain 모드는 `b` 뒤로, `q` 종료. 다시 이어서 하려면 `sudo grokbot-relay install --tui`를 실행하세요.
 - 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
 
 ## CLI

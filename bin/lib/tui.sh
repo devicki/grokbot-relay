@@ -53,6 +53,27 @@ export GUM_CHOOSE_CURSOR_FOREGROUND="$C_CYAN" GUM_CHOOSE_HEADER_FOREGROUND="$C_V
 
 g_style() { "$GUM" style "$@"; }
 
+# ---------------------------------------------------------------- navigation
+# Prompts run in $(...) subshells, so the "back"/"quit" intent goes through a file.
+UI_NAV_FILE="$(mktemp -t grokbot-relay-nav.XXXXXX)"
+trap 'rm -f "$UI_NAV_FILE"' EXIT
+nav_set()    { printf '%s' "$1" > "$UI_NAV_FILE"; }
+nav_get()    { cat "$UI_NAV_FILE" 2>/dev/null; }
+nav_clear()  { : > "$UI_NAV_FILE"; }
+nav_is_set() { [[ -s "$UI_NAV_FILE" ]]; }
+# Map a prompt's exit code to an intent. gum: 1 = Esc, 130 = Ctrl+C.
+# whiptail/dialog: 255 = Esc, 1 = Cancel (for yes/no, 1 = No and is not "back").
+nav_from_rc() { # rc, kind(menu|yesno)
+  case "$UI:$1" in
+    gum:1) nav_set back ;;
+    *:130) nav_set quit ;;
+    whiptail:255|dialog:255) nav_set back ;;
+    whiptail:1|dialog:1) [[ "${2:-menu}" == yesno ]] || nav_set back ;;
+  esac
+  return "$1"
+}
+UI_HINT="esc back · ctrl+c quit"
+
 # Status for the header (values readable as root or grokbot group; "?" otherwise)
 ui_status_line() {
   local state port bots ver
@@ -88,6 +109,7 @@ ui_header() {
     printf '  %s %s  %s\n' "$(g_style --foreground "$C_CYAN" --bold "[$n/$tot]")" \
       "$(g_style --foreground "$C_TEXT" --bold "$label")" \
       "$(g_style --foreground "$C_VIOLET" "${bar:0:fill}")$(g_style --foreground "#374151" "${bar:fill}")"
+    printf '  %s\n' "$(g_style --foreground "$C_DIM" "$UI_HINT")"
   fi
   echo
 }
@@ -96,7 +118,12 @@ g_box() { # color, text (with \n escapes)
   local txt; txt="$(printf '%b' "$2")"
   g_style --border rounded --border-foreground "$1" --foreground "$C_TEXT" --padding "0 1" --margin "0 1" --width "$UI_W" "$txt"
 }
-g_wait() { printf '  %s' "$(g_style --foreground "$C_DIM" "↵ continue")"; read -rs _ </dev/tty; echo; }
+g_wait() {
+  printf '  %s' "$(g_style --foreground "$C_DIM" "↵ continue${UI_STEP:+ · $UI_HINT}")"
+  local k=""; read -rsn1 k </dev/tty || true; echo
+  [[ "$k" == $'\e' ]] && nav_set back
+  return 0
+}
 
 # ---------------------------------------------------------------- primitives (dispatch)
 ui_msg() {
@@ -106,12 +133,17 @@ ui_msg() {
 ui_yesno() {
   [[ "$UI" == gum ]] || { legacy_ui_yesno "$@"; return; }
   ui_header; g_box "$C_VIOLET2" "$1"
-  "$GUM" confirm --affirmative "Yes" --negative "No" --default=true "  Continue?"
+  # choose instead of confirm: confirm returns 1 for both "No" and Esc.
+  local a rc=0; a="$("$GUM" choose --cursor "  ▸ " --header "" "Yes" "No")" || rc=$?
+  (( rc == 0 )) || { nav_from_rc "$rc"; return 1; }
+  [[ "$a" == Yes ]]
 }
 ui_input() {
   [[ "$UI" == gum ]] || { legacy_ui_input "$@"; return; }
   ui_header >&2
-  "$GUM" input --header "$(printf '%b' "$1" | sed 's/^/  /')" --prompt "  ❯ " --value "$2" --width "$UI_W" --placeholder "type and press enter"
+  local rc=0
+  "$GUM" input --header "$(printf '%b' "$1" | sed 's/^/  /')" --prompt "  ❯ " --value "$2" --width "$UI_W" --placeholder "type and press enter" || rc=$?
+  (( rc == 0 )) || nav_from_rc "$rc"
 }
 ui_menu() {
   [[ "$UI" == gum ]] || { legacy_ui_menu "$@"; return; }
@@ -119,8 +151,10 @@ ui_menu() {
   local -a opts=(); local it
   for it in "$@"; do opts+=("${it#*|}"$'\t'"${it%%|*}"); done
   ui_header >&2
+  local rc=0
   "$GUM" choose --header "$(printf '%b' "$text" | sed 's/^/  /')" --cursor "  ▸ " --label-delimiter $'\t' \
-    --height 14 "${opts[@]}"
+    --height 14 "${opts[@]}" || rc=$?
+  (( rc == 0 )) || nav_from_rc "$rc"
 }
 ui_run() {
   [[ "$UI" == gum ]] || { legacy_ui_run "$@"; return; }
@@ -129,7 +163,11 @@ ui_run() {
   ui_header
   ( "$@" ) >"$tmp" 2>&1 &
   local pid=$!
-  "$GUM" spin --spinner dot --title " $title …" -- bash -c "while kill -0 $pid 2>/dev/null; do sleep 0.15; done" || true
+  local src=0
+  "$GUM" spin --spinner dot --title " $title …" -- bash -c "while kill -0 $pid 2>/dev/null; do sleep 0.15; done" || src=$?
+  # Ctrl+C only marks "quit"; the running step finishes first so nothing is left half-done.
+  (( src == 130 )) && nav_set quit
+  if kill -0 "$pid" 2>/dev/null; then printf '  finishing the current step…\n'; fi
   wait "$pid" || rc=$?
   out="$(cat "$tmp")"; rm -f "$tmp"
   [[ -n "$out" ]] || out="(no output)"
@@ -151,7 +189,8 @@ ui_shell() {
   ui_header
   printf '  %s %s\n\n' "$(g_style --foreground "$C_CYAN" "⇄")" "$(g_style --foreground "$C_TEXT" --bold "$title")"
   local rc=0; ( "$@" ) || rc=$?
-  echo; printf '  %s ' "$(g_style --foreground "$C_DIM" "[exit $rc] ↵ back to menu")"; read -rs _ </dev/tty; echo
+  (( rc == 130 )) && nav_set quit
+  echo; printf '  %s ' "$(g_style --foreground "$C_DIM" "[exit $rc] ↵ continue")"; read -rs _ </dev/tty; echo
   return "$rc"
 }
 # Multi-select. $1 text, $2 comma-separated preselected, rest = items. Prints chosen, one per line.
@@ -161,14 +200,17 @@ ui_multi() {
   case "$UI" in
     gum)
       ui_header >&2
+      local rc=0
       "$GUM" choose --no-limit --header "$(printf '%b' "$text" | sed 's/^/  /')" --cursor "  ▸ " \
-        --selected="$pre" --selected-prefix "◉ " --unselected-prefix "○ " --cursor-prefix "○ " --height 14 "$@" ;;
+        --selected="$pre" --selected-prefix "◉ " --unselected-prefix "○ " --cursor-prefix "○ " --height 14 "$@" || rc=$?
+      (( rc == 0 )) || { nav_from_rc "$rc"; return "$rc"; } ;;
     whiptail|dialog)
       local -a args=()
       for it in "$@"; do
         if [[ ",$pre," == *",$it,"* ]]; then args+=("$it" "" ON); else args+=("$it" "" OFF); fi
       done
-      local out; out="$("$UI" --title "$UI_TITLE" --separate-output --checklist "$(printf '%b' "$text")" "$UI_H" "$UI_W" 10 "${args[@]}" 3>&1 1>&2 2>&3)" || return 1
+      local out rc=0; out="$("$UI" --title "$UI_TITLE" --separate-output --checklist "$(printf '%b' "$text")${UI_STEP:+\n\n[Esc] back · [Ctrl+C] quit}" "$UI_H" "$UI_W" 10 "${args[@]}" 3>&1 1>&2 2>&3)" || rc=$?
+      (( rc == 0 )) || { nav_from_rc "$rc"; return 1; }
       printf '%s\n' "$out" ;;
     *)
       printf '\n%b\n' "$text" >&2
@@ -177,7 +219,8 @@ ui_multi() {
         local mark=" "; [[ ",$pre," == *",$it,"* ]] && mark="x"
         printf '  %2d) [%s] %s\n' "$i" "$mark" "$it" >&2; i=$((i+1))
       done
-      local a; read -r -p "Numbers to keep, space-separated (Enter = the [x] ones): " a </dev/tty || return 1
+      local a; read -r -p "Numbers to keep, space-separated (Enter = the [x] ones${UI_STEP:+, b = back, q = quit}): " a </dev/tty || { nav_set quit; return 1; }
+      case "$a" in b|B) nav_set back; return 1 ;; q|Q) nav_set quit; return 1 ;; esac
       if [[ -z "$a" ]]; then for it in "${items[@]}"; do [[ ",$pre," == *",$it,"* ]] && echo "$it"; done; return 0; fi
       local n; for n in $a; do [[ "$n" =~ ^[0-9]+$ ]] && (( n>=1 && n<=${#items[@]} )) && echo "${items[$((n-1))]}"; done ;;
   esac
@@ -205,22 +248,30 @@ legacy_ui_danger() { # text -> 0 only if the user types YES
 
 legacy_ui_msg() { # text
   case "$UI" in
-    plain) printf '\n%b\n\n' "$1"; read -r -p "[Enter] " _ </dev/tty ;;
-    *) "$UI" --title "$UI_TITLE" --msgbox "$1" "$UI_H" "$UI_W" ;;
+    plain) printf '\n%b\n\n' "$1"; local a; read -r -p "[Enter]${UI_STEP:+ (b = back, q = quit)} " a </dev/tty || a=q
+           case "$a" in b|B) nav_set back ;; q|Q) nav_set quit ;; esac ;;
+    *) local rc=0; "$UI" --title "$UI_TITLE" --msgbox "$1${UI_STEP:+\n\n[Esc] back · [Ctrl+C] quit}" "$UI_H" "$UI_W" || rc=$?
+       (( rc == 255 )) && nav_set back; (( rc == 130 )) && nav_set quit; return 0 ;;
   esac
 }
 
 legacy_ui_yesno() { # text -> 0 yes / 1 no
   case "$UI" in
-    plain) local a; printf '%b [y/N] ' "$1"; read -r a </dev/tty; [[ "$a" =~ ^[Yy] ]] ;;
-    *) "$UI" --title "$UI_TITLE" --yesno "$1" "$UI_H" "$UI_W" ;;
+    plain) local a; printf '%b [y/N%s] ' "$1" "${UI_STEP:+, b = back, q = quit}"; read -r a </dev/tty || a=q
+           case "$a" in b|B) nav_set back; return 1 ;; q|Q) nav_set quit; return 1 ;; esac
+           [[ "$a" =~ ^[Yy] ]] ;;
+    *) local rc=0; "$UI" --title "$UI_TITLE" --yesno "$1${UI_STEP:+\n\n[Esc] back · [Ctrl+C] quit}" "$UI_H" "$UI_W" || rc=$?
+       (( rc == 0 )) || nav_from_rc "$rc" yesno ;;
   esac
 }
 
 legacy_ui_input() { # text default -> stdout value; status 1 on cancel
   case "$UI" in
-    plain) local a; read -r -p "$1 [$2]: " a </dev/tty || return 1; echo "${a:-$2}" ;;
-    *) "$UI" --title "$UI_TITLE" --inputbox "$1" 10 "$UI_W" "$2" 3>&1 1>&2 2>&3 ;;
+    plain) local a; read -r -p "$(printf '%b' "$1") [$2]${UI_STEP:+ (b = back, q = quit)}: " a </dev/tty || { nav_set quit; return 1; }
+           if [[ -n "$UI_STEP" ]]; then case "$a" in b|B) nav_set back; return 1 ;; q|Q) nav_set quit; return 1 ;; esac; fi
+           echo "${a:-$2}" ;;
+    *) local rc=0; "$UI" --title "$UI_TITLE" --inputbox "$1${UI_STEP:+\n[Esc] back · [Ctrl+C] quit}" 12 "$UI_W" "$2" 3>&1 1>&2 2>&3 || rc=$?
+       (( rc == 0 )) || nav_from_rc "$rc" ;;
   esac
 }
 
@@ -234,11 +285,13 @@ legacy_ui_menu() { # text, then "tag|label" items -> stdout tag; status 1 on can
       printf '\n== %s ==\n%b\n' "$UI_TITLE" "$text" >&2
       local i=1
       for it in "$@"; do printf '  %2d) %s\n' "$i" "${it#*|}" >&2; i=$((i+1)); done
-      printf '   0) Back / quit\n' >&2
-      local n; read -r -p "> " n </dev/tty || return 1
-      [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 && n <= ${#tags[@]} )) || return 1
+      printf '   0) Back / quit%s\n' "${UI_STEP:+   (b = back, q = quit)}" >&2
+      local n; read -r -p "> " n </dev/tty || { nav_set quit; return 1; }
+      case "$n" in b|B|0) nav_set back; return 1 ;; q|Q) nav_set quit; return 1 ;; esac
+      if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 1 || n > ${#tags[@]} )); then nav_set back; return 1; fi
       echo "${tags[$((n-1))]}" ;;
-    *) "$UI" --title "$UI_TITLE" --menu "$text" "$UI_H" "$UI_W" 12 "${args[@]}" 3>&1 1>&2 2>&3 ;;
+    *) local rc=0; "$UI" --title "$UI_TITLE" --menu "$text${UI_STEP:+\n[Esc] back · [Ctrl+C] quit}" "$UI_H" "$UI_W" 12 "${args[@]}" 3>&1 1>&2 2>&3 || rc=$?
+       (( rc == 0 )) || nav_from_rc "$rc" ;;
   esac
 }
 
@@ -299,7 +352,9 @@ t_restart()  { ui_root_or_msg && ui_run "restart" cmd_svc restart; }
 t_logs()     { ui_run "logs (last 100)" cmd_logs; }
 t_logs_f()   { ui_shell "logs -f (Ctrl+C to stop)" cmd_logs -f; }
 t_login()    { ui_root_or_msg || return 1
+  nav_clear 2>/dev/null || true
   ui_msg "Cursor sign-in as the grokbot user.\n\nA sign-in link will be printed. Open it in any browser (another computer is fine), finish signing in, and the command returns."
+  nav_is_set && return 1
   ui_shell "bdk login" cmd_login; }
 t_update()   { ui_root_or_msg && ui_yesno "Pull the source clone, recopy, npm ci and restart?\nenv and agents.json are kept." && ui_run "update" cmd_update; }
 t_node_up()  { ui_root_or_msg && ui_yesno "Refresh the private Node runtime to the latest $NODE_MAJOR.x?\nSHA256-checked; rolls back if validation fails." && ui_run "node-upgrade" cmd_node_upgrade; }
@@ -357,9 +412,12 @@ t_agents_pick() {
   while true; do
     local chosen=""
     if (( ${#cand[@]} )); then
+      nav_clear
       chosen="$(ui_multi "Select the bots this relay may contact (space toggles, enter confirms).${note:+\n$note}\nUncheck the example 'Research Bot'." "$pre" "${cand[@]}")" || return 0
     elif [[ -n "$note" ]]; then ui_msg "$note"; fi
+    nav_is_set && return 1
     local extra; extra="$(ui_input "Add more bot names, comma-separated (exactly as in the Grok Bot app). Leave empty to skip:" "")" || extra=""
+    nav_is_set && return 1
     local list; list="$(printf '%s\n' "$chosen"; tr ',' '\n' <<<"$extra")"
     if ! grep -q '[^[:space:]]' <<<"$list"; then ui_msg "The list can't be empty. Pick or type at least one bot."; continue; fi
     local out rc=0; out="$(agents_set <<<"$list" 2>&1)" || rc=$?
@@ -416,6 +474,7 @@ MAIN_MENU=(
 # ---------------------------------------------------------------- wizard
 w_welcome() {
   ui_yesno "Welcome to grokbot-relay $(read_version "$(script_root)").\n\nThis wizard will:\n  - choose the Node runtime (private by default)\n  - install the service (user, /opt app, env, systemd)\n  - sign in to Cursor\n  - choose your bots\n  - start the relay and run checks\n  - let regular users connect\n\nContinue?"
+  local rc=$?; (( rc == 0 )) || nav_is_set || nav_set quit; return "$rc"
 }
 W_NODE_MODE=private
 w_node() {
@@ -451,6 +510,7 @@ w_install() {
 }
 w_agents() {
   t_agents_pick || true
+  nav_is_set && return 1
   local list; list="$(agents_js list 2>/dev/null || true)"
   if grep -qx "Research Bot" <<<"$list" && ui_yesno "The example 'Research Bot' is still listed. Pick again?"; then t_agents_pick || true; fi
   return 0
@@ -464,6 +524,7 @@ w_users() {
     [[ -n "$u" ]] || break
     if id "$u" >/dev/null 2>&1; then ui_run "usermod" usermod -aG "$SVC_USER" "$u"; else ui_msg "No such user: $u"; fi
   done
+  nav_is_set && return 1
   t_connect
 }
 
@@ -479,17 +540,58 @@ WIZARD_STEPS=(
   "users|Group users|w_users"
 )
 
+ui_confirm_quit() { # 0 = quit
+  local saved="$UI_STEP" a rc=0
+  UI_STEP=""
+  case "$UI" in
+    gum) ui_header; g_box "$C_WARN" "Quit the setup wizard?\n\nNothing is lost: finished steps stay done, and you can resume any time with:\n  sudo grokbot-relay install --tui"
+         a="$("$GUM" choose --cursor "  ▸ " "Keep going" "Quit setup")" || rc=$? ;;
+    plain) printf '\nQuit the setup wizard? Finished steps stay done. [y/N] '; read -r a </dev/tty || a=y
+           [[ "$a" =~ ^[Yy] ]] && a="Quit setup" ;;
+    *) "$UI" --title "$UI_TITLE" --yesno "Quit the setup wizard?\n\nFinished steps stay done. Resume with:\n  sudo grokbot-relay install --tui" 12 "$UI_W" && a="Quit setup" ;;
+  esac
+  UI_STEP="$saved"; nav_clear
+  (( rc == 130 )) && return 0   # Ctrl+C on the quit prompt = quit
+  [[ "$a" == "Quit setup" ]]
+}
+
+# Step-index loop: Esc = previous step, Ctrl+C / q = quit (asks first). Ctrl+C never advances.
 tui_wizard() {
   ui_bootstrap_gum
   ui_root_or_msg || return 1
-  local e id label fn i=0 total=${#WIZARD_STEPS[@]}
-  for e in "${WIZARD_STEPS[@]}"; do
-    IFS='|' read -r id label fn <<<"$e"
-    i=$((i+1)); UI_STEP="$i/$total $label"
-    UI_TITLE="grokbot-relay setup [$i/$total] $label"
-    if ! "$fn"; then UI_STEP=""; UI_TITLE="grokbot-relay"; ui_msg "Setup stopped at: $label.\nRun it again any time: sudo grokbot-relay install --tui"; return 1; fi
+  local total=${#WIZARD_STEPS[@]} idx=0 id label fn rc nav
+  trap 'nav_set quit' INT
+  while (( idx < total )); do
+    IFS='|' read -r id label fn <<<"${WIZARD_STEPS[$idx]}"
+    UI_STEP="$((idx+1))/$total $label"
+    UI_TITLE="grokbot-relay setup [$((idx+1))/$total] $label"
+    nav_clear
+    rc=0; "$fn" || rc=$?
+    nav="$(nav_get)"
+    case "$nav" in
+      quit)
+        if ui_confirm_quit; then break; fi
+        continue ;;                       # stay on this step
+      back)
+        if (( idx == 0 )); then
+          if ui_confirm_quit; then break; fi
+        else idx=$((idx-1)); fi
+        continue ;;
+    esac
+    if (( rc != 0 )); then
+      UI_STEP=""; UI_TITLE="grokbot-relay"; trap - INT
+      ui_msg "Setup stopped at: $label.\nRun it again any time: sudo grokbot-relay install --tui"
+      return 1
+    fi
+    idx=$((idx+1))
   done
+  trap - INT
   UI_STEP=""; UI_TITLE="grokbot-relay"
+  if (( idx < total )); then
+    clear 2>/dev/null || true
+    echo "Setup paused at step $((idx+1))/$total ($label). Resume: sudo grokbot-relay install --tui"
+    return 0
+  fi
   ui_msg "Setup finished. Open the menu any time with: sudo grokbot-relay"
 }
 

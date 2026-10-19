@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.4
+- Wizard: **Esc goes back** one step (on step 1 it asks to quit) instead of advancing. **Ctrl+C asks to quit** (SIGINT trapped) and never advances; quitting leaves partial state safe, and re-running `sudo grokbot-relay install --tui` resumes.
+- Footer hint `esc back · ctrl+c quit` on every step; the wizard is now a step-index loop.
+- whiptail/dialog: Esc/Cancel = back. Plain fallback: `b` = back, `q` = quit.
+- gum yes/no prompts use `choose Yes/No`, because gum `confirm` returns the same code for Esc and No.
+
 ## 0.7.3
 - Wizard order: Cursor login now comes before choosing bots.
 - New bot picker (`agents pick`, wizard step, TUI Bots menu, and `agents add` with no name on a terminal): multi-select with current names pre-checked (gum / whiptail checklist / plain numbers) plus comma-separated manual entry; never saves an empty list.
