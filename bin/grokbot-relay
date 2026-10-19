@@ -1,0 +1,426 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2015  # pass/bad/note always succeed
+# grokbot-relay: install and operate the Grok Bot relay (Cursor BDK) service.
+# Run `grokbot-relay help` for commands.
+set -euo pipefail
+
+APP_DIR=/opt/grokbot-relay
+RELAY_DIR="$APP_DIR/relay"
+HOME_DIR=/var/lib/grokbot
+ENV_DIR=/etc/grokbot-relay
+ENV_FILE="$ENV_DIR/env"
+AGENTS_FILE="$ENV_DIR/agents.json"
+SOURCE_FILE="$ENV_DIR/source"
+UNIT_NAME=grokbot-relay.service
+UNIT="/etc/systemd/system/$UNIT_NAME"
+SVC_USER=grokbot
+NPM_PKG=@cursor/bdk
+
+die() { echo "grokbot-relay: $*" >&2; exit 1; }
+info() { echo "==> $*"; }
+need_root() { [[ $EUID -eq 0 ]] || die "'$1' needs root. Try: sudo grokbot-relay $1"; }
+
+self_dir() { local p; p="$(readlink -f "${BASH_SOURCE[0]}")"; dirname "$p"; }
+# Source tree containing this script (repo root or /opt copy)
+script_root() { cd "$(self_dir)/.." && pwd; }
+
+read_version() { local f="$1/VERSION"; [[ -f "$f" ]] && tr -d ' \n' < "$f" || echo unknown; }
+
+as_svc() { sudo -u "$SVC_USER" -H bash -c "$1"; }
+
+env_value() { # never print the token; only used internally
+  sed -n "s/^$1=//p" "$ENV_FILE" | head -n1
+}
+
+check_node() {
+  command -v node >/dev/null || die "Node.js 22+ is required (not found)."
+  local major; major="$(node -p 'process.versions.node.split(".")[0]')"
+  (( major >= 22 )) || die "Node.js 22+ is required (found $(node -v))."
+}
+
+installed_bdk() {
+  [[ -f "$RELAY_DIR/node_modules/$NPM_PKG/package.json" ]] || { echo none; return; }
+  node -p "require('$RELAY_DIR/node_modules/$NPM_PKG/package.json').version"
+}
+
+copy_app() { # $1 = source repo root
+  local src="$1"
+  [[ -d "$src/relay" ]] || die "$src does not look like a grokbot-relay clone (no relay/)."
+  install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$APP_DIR"
+  local new="$APP_DIR/relay.new"
+  rm -rf "$new"
+  cp -a "$src/relay" "$new"
+  rm -rf "$new/node_modules" "$new/.agent-serve" "$new/memory"
+  if [[ -d "$RELAY_DIR/node_modules" ]]; then mv "$RELAY_DIR/node_modules" "$new/"; fi
+  rm -rf "$RELAY_DIR"
+  mv "$new" "$RELAY_DIR"
+  rm -rf "${APP_DIR:?}/bin" && cp -a "$src/bin" "$APP_DIR/bin"
+  rm -rf "${APP_DIR:?}/deploy" && cp -a "$src/deploy" "$APP_DIR/deploy"
+  cp "$src/VERSION" "$APP_DIR/VERSION"
+  cp "$src/agents.example.json" "$APP_DIR/agents.example.json"
+  chown -R "$SVC_USER:$SVC_USER" "$APP_DIR"
+  chmod 755 "$APP_DIR" "$APP_DIR/bin" "$APP_DIR/bin/grokbot-relay"
+}
+
+npm_ci() {
+  if [[ -f "$RELAY_DIR/package-lock.json" ]]; then
+    as_svc "cd '$RELAY_DIR' && npm ci --no-audit --no-fund"
+  else
+    as_svc "cd '$RELAY_DIR' && npm install --no-audit --no-fund"
+  fi
+}
+
+validate_relay() {
+  as_svc "cd '$RELAY_DIR' && set -a && . '$ENV_FILE' && set +a && GROKBOT_RELAY_AGENTS_FILE='$AGENTS_FILE' ./node_modules/.bin/bdk validate </dev/null"
+}
+
+restart_if_active() {
+  if systemctl is-active --quiet "$UNIT_NAME"; then
+    systemctl restart "$UNIT_NAME"; info "Restarted $UNIT_NAME."
+  else
+    info "$UNIT_NAME is not running; start it with: sudo grokbot-relay start"
+  fi
+}
+
+# ---------------------------------------------------------------- install
+cmd_install() {
+  need_root install
+  local port=3000
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --port) port="${2:?--port needs a number}"; shift 2 ;;
+      *) die "install: unknown option $1" ;;
+    esac
+  done
+  local src; src="$(script_root)"
+  [[ "$src" == "$APP_DIR" ]] && [[ -f "$SOURCE_FILE" ]] && src="$(cat "$SOURCE_FILE")"
+
+  check_node
+
+  getent group "$SVC_USER" >/dev/null || groupadd --system "$SVC_USER"
+  if ! id "$SVC_USER" >/dev/null 2>&1; then
+    useradd --system --gid "$SVC_USER" --home-dir "$HOME_DIR" --create-home --shell /usr/sbin/nologin "$SVC_USER"
+  fi
+  install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$HOME_DIR" "$HOME_DIR/state"
+
+  info "Copying relay from $src to $APP_DIR"
+  copy_app "$src"
+  npm_ci
+
+  install -d -o root -g "$SVC_USER" -m 750 "$ENV_DIR"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    local token
+    token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+    ( umask 077; printf 'GROKBOT_RELAY_PORT=%s\nGROKBOT_RELAY_TOKEN=%s\n' "$port" "$token" > "$ENV_FILE" )
+    unset token
+    info "Created $ENV_FILE (token not shown)."
+  else
+    info "$ENV_FILE exists; kept as is."
+  fi
+  chown root:"$SVC_USER" "$ENV_FILE"; chmod 640 "$ENV_FILE"
+
+  if [[ ! -f "$AGENTS_FILE" ]]; then
+    install -o root -g "$SVC_USER" -m 640 "$src/agents.example.json" "$AGENTS_FILE"
+    info "Created $AGENTS_FILE from agents.example.json. EDIT IT before starting."
+  else
+    info "$AGENTS_FILE exists; kept as is."
+  fi
+  chown root:"$SVC_USER" "$AGENTS_FILE"; chmod 640 "$AGENTS_FILE"
+
+  printf '%s\n' "$src" > "$SOURCE_FILE"; chmod 644 "$SOURCE_FILE"
+
+  install -o root -g root -m 644 "$src/deploy/$UNIT_NAME" "$UNIT"
+  systemctl daemon-reload
+  systemctl enable "$UNIT_NAME" >/dev/null
+  ln -sf "$APP_DIR/bin/grokbot-relay" /usr/local/bin/grokbot-relay
+
+  cat <<NEXT
+
+Installed grokbot-relay $(read_version "$APP_DIR"). Not started yet. Next steps:
+  1) Set your bot names (exactly as shown in the Grok Bot app):
+       sudo grokbot-relay agents edit        # or: agents add "<name>"
+  2) Sign in to Cursor as the service user:
+       sudo grokbot-relay login
+  3) Start and check:
+       sudo grokbot-relay start
+       sudo grokbot-relay doctor
+  4) Allow regular users to connect (they log out and back in):
+       sudo usermod -aG $SVC_USER <user>
+     then each user runs: grokbot-relay connect-claude
+NEXT
+}
+
+# ---------------------------------------------------------------- service
+cmd_login() {
+  need_root login
+  [[ -d "$RELAY_DIR" ]] || die "Not installed. Run: sudo grokbot-relay install"
+  as_svc "cd '$RELAY_DIR' && ./node_modules/.bin/bdk login"
+}
+
+cmd_svc() { need_root "$1"; systemctl "$1" "$UNIT_NAME"; [[ "$1" == start || "$1" == restart ]] && systemctl --no-pager --lines=0 status "$UNIT_NAME" || true; }
+cmd_status() { systemctl --no-pager status "$UNIT_NAME" || true; }
+cmd_logs() {
+  local args=(-u "$UNIT_NAME" --no-pager -n 100)
+  [[ "${1:-}" == "-f" ]] && args+=(-f)
+  journalctl "${args[@]}"
+}
+
+# ---------------------------------------------------------------- update
+cmd_update() {
+  need_root update
+  [[ -f "$SOURCE_FILE" ]] || die "No source recorded ($SOURCE_FILE). Re-run install from your clone."
+  local src old new
+  src="$(cat "$SOURCE_FILE")"
+  [[ -d "$src/.git" ]] || die "$src is not a git clone."
+  old="$(read_version "$APP_DIR")"
+  local owner; owner="$(stat -c %U "$src")"
+  info "git pull in $src (as $owner)"
+  sudo -u "$owner" git -C "$src" pull --ff-only
+  new="$(read_version "$src")"
+  copy_app "$src"
+  npm_ci
+  install -o root -g root -m 644 "$src/deploy/$UNIT_NAME" "$UNIT"
+  systemctl daemon-reload
+  info "Kept $ENV_FILE and $AGENTS_FILE."
+  restart_if_active
+  info "Version: $old -> $new"
+}
+
+# ---------------------------------------------------------------- bdk
+cmd_bdk_check() {
+  local cur latest
+  cur="$(installed_bdk)"
+  latest="$(npm view "$NPM_PKG" version 2>/dev/null || echo unknown)"
+  echo "installed $NPM_PKG: $cur"
+  echo "latest    $NPM_PKG: $latest"
+  if [[ "$cur" != "$latest" && "$latest" != unknown ]]; then
+    echo "An update is available: sudo grokbot-relay bdk-upgrade"
+  else
+    echo "Up to date."
+  fi
+  local repo
+  repo="$(npm view "$NPM_PKG" repository.url 2>/dev/null || true)"
+  echo "npm page:  https://www.npmjs.com/package/$NPM_PKG?activeTab=versions"
+  [[ -n "$repo" ]] && echo "repository: $repo"
+  echo "docs:      https://cursor.com/docs/bdk"
+}
+
+cmd_bdk_upgrade() {
+  need_root bdk-upgrade
+  local pin=0
+  [[ "${1:-}" == "--pin" ]] && pin=1
+  [[ -d "$RELAY_DIR" ]] || die "Not installed."
+  local old new bak
+  old="$(installed_bdk)"
+  bak="$(mktemp -d)"
+  cp "$RELAY_DIR/package.json" "$RELAY_DIR/package-lock.json" "$bak/" 2>/dev/null || true
+  info "Upgrading $NPM_PKG ($old -> latest)"
+  if ! as_svc "cd '$RELAY_DIR' && npm install --no-audit --no-fund $NPM_PKG@latest"; then
+    die "npm install failed; nothing changed in the running service."
+  fi
+  new="$(installed_bdk)"
+  if validate_relay; then
+    info "bdk validate passed ($old -> $new)."
+    restart_if_active
+  else
+    echo "bdk validate FAILED on $new. Rolling back to $old." >&2
+    cp "$bak/package.json" "$RELAY_DIR/package.json"
+    [[ -f "$bak/package-lock.json" ]] && cp "$bak/package-lock.json" "$RELAY_DIR/package-lock.json"
+    chown "$SVC_USER:$SVC_USER" "$RELAY_DIR/package.json" "$RELAY_DIR/package-lock.json"
+    npm_ci
+    rm -rf "$bak"
+    exit 1
+  fi
+  if (( pin )); then
+    local src owner; src="$(cat "$SOURCE_FILE")"; owner="$(stat -c %U "$src")"
+    install -o "$owner" -m 644 "$RELAY_DIR/package.json" "$src/relay/package.json"
+    install -o "$owner" -m 644 "$RELAY_DIR/package-lock.json" "$src/relay/package-lock.json"
+    info "Wrote package.json/package-lock.json into $src/relay."
+  fi
+  rm -rf "$bak"
+  cat <<UP
+
+To share this bump upstream:
+  cd <your clone>              # recorded in $SOURCE_FILE
+  sudo grokbot-relay bdk-upgrade --pin   # (or copy relay/package*.json from $RELAY_DIR)
+  git checkout -b bdk-$new
+  git commit -am "relay: bump $NPM_PKG to $new"
+  git push -u origin bdk-$new  # then open a pull request
+UP
+}
+
+# ---------------------------------------------------------------- agents
+agents_js() { # $1 = op, $2 = name
+  node - "$AGENTS_FILE" "$1" "${2:-}" <<'JS'
+const fs = require("fs");
+const [file, op, name] = process.argv.slice(2);
+let data = { agents: [] };
+try { data = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { if (op !== "add") { console.error(`cannot read ${file}: ${e.message}`); process.exit(2); } }
+if (!Array.isArray(data.agents)) data.agents = [];
+const names = () => data.agents.map((a) => (typeof a === "string" ? a : a.name));
+if (op === "list") { const n = names(); if (!n.length) console.log("(empty: the relay will refuse to start)"); n.forEach((x) => console.log(x)); process.exit(0); }
+const nm = (name || "").trim();
+if (!nm || nm === "*") { console.error("invalid name"); process.exit(2); }
+if (op === "add") { if (names().includes(nm)) { console.log(`already listed: ${nm}`); process.exit(3); } data.agents.push({ name: nm }); }
+if (op === "remove") {
+  if (!names().includes(nm)) { console.error(`not listed: ${nm}`); process.exit(2); }
+  const rest = data.agents.filter((a) => (typeof a === "string" ? a : a.name) !== nm);
+  if (!rest.length) { console.error("refusing to remove the last agent: the list must not be empty"); process.exit(2); }
+  data.agents = rest;
+}
+fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+console.log(`${op === "add" ? "added" : "removed"}: ${nm}`);
+JS
+}
+
+agents_check_nonempty() {
+  node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const n=(d.agents||[]).map(a=>typeof a==="string"?a:a&&a.name).filter(x=>x&&x.trim()&&x!=="*");if(!n.length){process.exit(1)}' "$AGENTS_FILE"
+}
+
+cmd_agents() {
+  local sub="${1:-list}"; shift || true
+  case "$sub" in
+    list)
+      [[ -r "$AGENTS_FILE" ]] || die "Cannot read $AGENTS_FILE (need root or grokbot group)."
+      agents_js list ;;
+    add|remove)
+      need_root "agents $sub"
+      [[ -n "${1:-}" ]] || die "usage: grokbot-relay agents $sub \"<name>\""
+      local rc=0; agents_js "$sub" "$1" || rc=$?
+      (( rc == 3 )) && return 0
+      (( rc == 0 )) || exit "$rc"
+      chown root:"$SVC_USER" "$AGENTS_FILE"; chmod 640 "$AGENTS_FILE"
+      restart_if_active ;;
+    edit)
+      need_root "agents edit"
+      local tmp; tmp="$(mktemp)"; cp "$AGENTS_FILE" "$tmp"
+      "${EDITOR:-nano}" "$tmp"
+      if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$tmp" 2>/dev/null; then
+        rm -f "$tmp"; die "Invalid JSON; $AGENTS_FILE unchanged."
+      fi
+      local saved="$AGENTS_FILE"; AGENTS_FILE="$tmp"
+      if ! agents_check_nonempty; then AGENTS_FILE="$saved"; rm -f "$tmp"; die "The list is empty; $saved unchanged."; fi
+      AGENTS_FILE="$saved"
+      install -o root -g "$SVC_USER" -m 640 "$tmp" "$AGENTS_FILE"; rm -f "$tmp"
+      info "Saved $AGENTS_FILE."
+      restart_if_active ;;
+    *) die "usage: grokbot-relay agents list|add NAME|remove NAME|edit" ;;
+  esac
+}
+
+# ---------------------------------------------------------------- doctor
+cmd_doctor() {
+  local ok=0 warn=0
+  pass() { echo "  [ok]   $*"; ok=$((ok+1)); }
+  bad()  { echo "  [FAIL] $*"; warn=$((warn+1)); }
+  note() { echo "  [info] $*"; }
+  echo "grokbot-relay $(read_version "$APP_DIR") doctor"
+
+  if command -v node >/dev/null; then
+    local m; m="$(node -p 'process.versions.node.split(".")[0]')"
+    (( m >= 22 )) && pass "node $(node -v)" || bad "node $(node -v) (need 22+)"
+  else bad "node not found"; fi
+
+  [[ -d "$RELAY_DIR/node_modules" ]] && pass "app installed in $RELAY_DIR" || bad "app not installed (sudo grokbot-relay install)"
+  note "$NPM_PKG $(installed_bdk) (latest check: grokbot-relay bdk-check)"
+
+  systemctl is-enabled --quiet "$UNIT_NAME" 2>/dev/null && pass "service enabled at boot" || note "service not enabled at boot"
+  systemctl is-active --quiet "$UNIT_NAME" 2>/dev/null && pass "service running" || bad "service not running"
+
+  for f in "$ENV_FILE" "$AGENTS_FILE"; do
+    if [[ -e "$f" ]]; then
+      local perm own; perm="$(stat -c %a "$f")"; own="$(stat -c %U:%G "$f")"
+      [[ "$perm" == 640 && "$own" == "root:$SVC_USER" ]] && pass "$f ($perm $own)" || bad "$f is $perm $own (want 640 root:$SVC_USER)"
+    else bad "$f missing"; fi
+  done
+
+  if [[ -r "$AGENTS_FILE" ]]; then
+    agents_check_nonempty && pass "agents list not empty ($(agents_js list | wc -l))" || bad "agents list empty (relay refuses to start)"
+  else note "cannot read $AGENTS_FILE without root/grokbot group"; fi
+
+  if [[ -r "$ENV_FILE" ]]; then
+    local port; port="$(env_value GROKBOT_RELAY_PORT)"
+    [[ -n "$(env_value GROKBOT_RELAY_TOKEN)" ]] && pass "token set (not shown)" || bad "token missing in $ENV_FILE"
+    if command -v ss >/dev/null; then
+      if ss -ltn "sport = :$port" | grep -q "127.0.0.1:$port"; then pass "listening on 127.0.0.1:$port"
+      elif ss -ltn "sport = :$port" | grep -q ":$port"; then bad "port $port is listening but not only on 127.0.0.1"
+      else bad "nothing listening on 127.0.0.1:$port"; fi
+    else note "ss not found; skipped port check"; fi
+  else note "cannot read $ENV_FILE without root/grokbot group"; fi
+
+  if [[ $EUID -eq 0 && -d "$RELAY_DIR/node_modules" ]]; then
+    if as_svc "cd '$RELAY_DIR' && timeout 20 ./node_modules/.bin/bdk whoami </dev/null" >/dev/null 2>&1; then
+      pass "Cursor login present (bdk whoami)"
+    else bad "Cursor login not detected (sudo grokbot-relay login)"; fi
+  else note "login check needs root"; fi
+
+  echo "$ok ok, $warn problem(s)"
+  (( warn == 0 ))
+}
+
+# ---------------------------------------------------------------- connect
+cmd_connect_claude() {
+  [[ $EUID -ne 0 ]] || die "Run connect-claude as your regular user, not root."
+  local scope=user
+  [[ "${1:-}" == "--scope" && -n "${2:-}" ]] && scope="$2"
+  command -v claude >/dev/null || die "Claude Code (claude) not found."
+  [[ -r "$ENV_FILE" ]] || die "Cannot read $ENV_FILE. Ask the admin: sudo usermod -aG $SVC_USER $USER (then log in again)."
+  [[ -n "$(env_value GROKBOT_RELAY_PORT)" && -n "$(env_value GROKBOT_RELAY_TOKEN)" ]] || die "$ENV_FILE is missing values."
+  claude mcp remove grokbot --scope "$scope" >/dev/null 2>&1 || true
+  # The token is read from the env file each time the server starts; it is not stored in Claude Code's config.
+  # shellcheck disable=SC2016
+  claude mcp add grokbot --scope "$scope" -- bash -c \
+    'set -a; . /etc/grokbot-relay/env; set +a; exec npx -y @cursor/bdk mcp --url "http://127.0.0.1:${GROKBOT_RELAY_PORT}" --bearer-token "${GROKBOT_RELAY_TOKEN}"'
+  echo "Registered MCP server 'grokbot' (scope: $scope). Check with: claude mcp list"
+}
+
+cmd_help() {
+  cat <<'H'
+grokbot-relay: install and operate the Grok Bot relay (Cursor BDK) service
+
+Setup (root)
+  install [--port N]        install or reinstall (user, /opt app, env, agents.json, systemd unit)
+  login                     Cursor sign-in as the grokbot user (bdk login)
+  update                    git pull the source clone, recopy, npm ci, restart; keeps env/agents
+Service (root, except status/logs)
+  start | stop | restart    control the service
+  status                    systemctl status
+  logs [-f]                 recent logs (follow with -f)
+  enable | disable          start at boot or not
+Agents
+  agents list               show allowed bot names
+  agents add NAME           add a name (root), restarts if running
+  agents remove NAME        remove a name (root); the last one cannot be removed
+  agents edit               edit agents.json in $EDITOR (root), validated before saving
+BDK
+  bdk-check                 compare installed @cursor/bdk with npm latest
+  bdk-upgrade [--pin]       upgrade @cursor/bdk, validate, restart or roll back (root);
+                            --pin also writes package*.json into the source clone for a PR
+Other
+  doctor                    health checks (node, service, files, port, login, bdk)
+  connect-claude [--scope user|local]   register the relay in Claude Code (regular user in grokbot group)
+  version | help
+H
+}
+
+main() {
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    install) cmd_install "$@" ;;
+    login) cmd_login ;;
+    start|stop|restart|enable|disable) cmd_svc "$cmd" ;;
+    status) cmd_status ;;
+    logs) cmd_logs "$@" ;;
+    update) cmd_update ;;
+    bdk-check) cmd_bdk_check ;;
+    bdk-upgrade) cmd_bdk_upgrade "$@" ;;
+    agents) cmd_agents "$@" ;;
+    doctor) cmd_doctor ;;
+    connect-claude) cmd_connect_claude "$@" ;;
+    version|--version|-v) echo "grokbot-relay $(read_version "$(script_root)")" ;;
+    help|--help|-h) cmd_help ;;
+    *) echo "unknown command: $cmd" >&2; cmd_help >&2; exit 2 ;;
+  esac
+}
+
+main "$@"

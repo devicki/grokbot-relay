@@ -72,35 +72,65 @@ claude plugin install grokbot-relay@dev-toolkit
 관리자(root):
 
 ```bash
+node -v                                   # v22 이상
 git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
-sudo ./deploy/install.sh            # 선택: --port 3000
-sudo nano /etc/grokbot-relay/agents.json   # 내 봇 이름 적기 (agents.example.json으로 생성됨)
-sudo -u grokbot -H bash -c 'cd /opt/grokbot-relay/relay && npx bdk login'
-sudo systemctl start grokbot-relay
-sudo systemctl status grokbot-relay --no-pager
+sudo ./bin/grokbot-relay install          # 또는 sudo ./deploy/install.sh, 선택: --port 3000
+sudo grokbot-relay agents add "Feedhand"  # 내 봇 이름, 앱에 보이는 그대로 (또는 agents edit)
+sudo grokbot-relay agents remove "Research Bot"   # 예시 이름 빼기
+sudo grokbot-relay login                  # grokbot 계정으로 Cursor 로그인
+sudo grokbot-relay start
+sudo grokbot-relay doctor
 sudo usermod -aG grokbot <사용자1>
 sudo usermod -aG grokbot <사용자2>
+```
+
+나중에 업데이트:
+
+```bash
+sudo grokbot-relay update                 # 기록된 clone에서 git pull, 다시 복사, npm ci, 재시작. 이전 → 새 버전 표시
+sudo grokbot-relay bdk-check              # 새 @cursor/bdk가 나왔는지
+sudo grokbot-relay bdk-upgrade            # 올리고 validate, 통과하면 재시작, 실패하면 되돌림
 ```
 
 일반 사용자 각자 (`usermod` 후 다시 로그인):
 
 ```bash
-git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
-./deploy/connect-claude.sh          # MCP 서버 "grokbot" 등록 (user 범위)
+id                                        # grokbot 그룹이 보이는지
+grokbot-relay connect-claude              # MCP 서버 "grokbot" 등록 (user 범위)
 claude mcp list
 claude plugin marketplace add devicki/dev-toolkit
 claude plugin install grokbot-relay@dev-toolkit
 ```
 
+## CLI
+
+`install`이 `/usr/local/bin/grokbot-relay`를 `/opt/grokbot-relay/bin`의 사본으로 연결합니다. `update`에 쓰려고 원본 clone 경로를 `/etc/grokbot-relay/source`에 기록합니다. 토큰은 어떤 명령도 출력하지 않습니다.
+
+| 명령 | root | 내용 |
+|---|---|---|
+| `install [--port N]` | 필요 | 계정, `/opt` 앱, `npm ci`, env(토큰은 처음 한 번만 생성), `agents.json`(없으면 예시로 생성), systemd 유닛 enable (시작은 안 함) |
+| `login` | 필요 | grokbot 계정으로 `bdk login` |
+| `start`, `stop`, `restart` | 필요 | 서비스 제어 |
+| `status`, `logs [-f]` | 불필요 | `systemctl status`, `journalctl` |
+| `enable`, `disable` | 필요 | 부팅 시 자동 시작 켜기·끄기 |
+| `update` | 필요 | 원본 clone에서 `git pull --ff-only`, 다시 복사, `npm ci`, 재시작. env와 `agents.json`은 유지 |
+| `bdk-check` | 불필요 | 설치된 `@cursor/bdk`와 npm 최신 버전 비교, 링크 표시 |
+| `bdk-upgrade [--pin]` | 필요 | `/opt`에서 `npm install @cursor/bdk@latest`, `bdk validate` 통과 시에만 재시작, 실패하면 되돌림. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함 |
+| `agents list` | 그룹 | 허용된 이름 |
+| `agents add NAME`, `agents remove NAME`, `agents edit` | 필요 | `agents.json` 수정 후 재시작. 빈 목록은 거부 |
+| `doctor` | root 권장 | node, 파일과 권한, 서비스, 127.0.0.1 포트, 로그인(`bdk whoami`), bdk 버전 |
+| `connect-claude [--scope user\|local]` | 불필요 (grokbot 그룹) | Claude Code에 중계 등록 |
+| `version`, `help` | 불필요 | |
+
 참고:
-- `connect-claude.sh`는 시작할 때마다 `/etc/grokbot-relay/env`를 읽는 `bash -c` 명령을 등록합니다. 그래서 토큰이 Claude Code 설정(`~/.claude.json`)에 **저장되지 않습니다**. 토큰을 직접 넣어 `claude mcp add`를 하면 거기에 평문으로 저장됩니다.
+- `connect-claude`는 시작할 때마다 `/etc/grokbot-relay/env`를 읽는 `bash -c` 명령을 등록합니다. 그래서 토큰이 Claude Code 설정(`~/.claude.json`)에 **저장되지 않습니다**. 토큰을 직접 넣어 `claude mcp add`를 하면 거기에 평문으로 저장됩니다.
 - 토큰은 프로세스 인자(`--bearer-token`)로 넘어가서 같은 서버의 다른 사용자가 `ps`로 볼 수 있습니다. 공용 서버라면 `/proc`를 `hidepid=2`로 마운트하세요.
 - `grokbot` 그룹 사용자는 토큰 하나를 같이 써서 BDK 호출자 신원(연락 목록, 읽은 위치)과 Grok Bot 계정을 공유합니다.
-- 토큰 교체: env 파일 수정 후 `sudo systemctl restart grokbot-relay`. 사용자는 다시 할 일이 없습니다.
+- 토큰 교체: env 파일 수정 후 `sudo grokbot-relay restart`. 사용자는 다시 할 일이 없습니다.
 
 **서버에서 확인 필요**
 - 유닛의 `bdk serve` 옵션: `--host 127.0.0.1 --port`, `--mode single`(MCP 경로 `/v1/mcp`), `--bearer-token` (0.2.25 CLI 문서 기준, 아직 실행 안 함)
-- `/var/lib/grokbot` 아래 CLI 설정에 저장되는 `bdk login` 정보가 재부팅 후에도 남고, 하드닝된 유닛에서도 읽히는지
+- `doctor`의 로그인 확인(`bdk whoami`)이 동작하는지, `/var/lib/grokbot` 아래 CLI 설정에 저장되는 `bdk login` 정보가 재부팅 후에도 남고, 하드닝된 유닛에서도 읽히는지
 - 화면 없는 서버에서 `bdk login`이 로그인 링크를 출력해 다른 브라우저로 열 수 있는지
 
 ## 안전

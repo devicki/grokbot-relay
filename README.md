@@ -72,35 +72,65 @@ One server, one service account `grokbot`, several users. An admin (root) instal
 Admin (root):
 
 ```bash
+node -v                                   # v22+
 git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
-sudo ./deploy/install.sh            # optional: --port 3000
-sudo nano /etc/grokbot-relay/agents.json   # list your bot names (created from agents.example.json)
-sudo -u grokbot -H bash -c 'cd /opt/grokbot-relay/relay && npx bdk login'
-sudo systemctl start grokbot-relay
-sudo systemctl status grokbot-relay --no-pager
+sudo ./bin/grokbot-relay install          # or: sudo ./deploy/install.sh ; optional --port 3000
+sudo grokbot-relay agents add "Feedhand"  # your bot names, exactly as in the app (or: agents edit)
+sudo grokbot-relay agents remove "Research Bot"   # drop the example name
+sudo grokbot-relay login                  # Cursor sign-in as the grokbot user
+sudo grokbot-relay start
+sudo grokbot-relay doctor
 sudo usermod -aG grokbot <user1>
 sudo usermod -aG grokbot <user2>
+```
+
+Update later:
+
+```bash
+sudo grokbot-relay update                 # git pull the recorded clone, recopy, npm ci, restart; shows old -> new version
+sudo grokbot-relay bdk-check              # is a newer @cursor/bdk out?
+sudo grokbot-relay bdk-upgrade            # upgrade, validate, restart or roll back
 ```
 
 Each regular user (log out and back in after `usermod`):
 
 ```bash
-git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
-./deploy/connect-claude.sh          # registers MCP server "grokbot" (user scope)
+id                                        # grokbot group listed?
+grokbot-relay connect-claude              # registers MCP server "grokbot" (user scope)
 claude mcp list
 claude plugin marketplace add devicki/dev-toolkit
 claude plugin install grokbot-relay@dev-toolkit
 ```
 
+## CLI
+
+`install` links `/usr/local/bin/grokbot-relay` to the copy in `/opt/grokbot-relay/bin`. The source clone path is recorded in `/etc/grokbot-relay/source` for `update`. The token is never printed.
+
+| Command | Root | What |
+|---|---|---|
+| `install [--port N]` | yes | user, `/opt` app, `npm ci`, env (token made once), `agents.json` (from example if missing), systemd unit enabled but not started |
+| `login` | yes | `bdk login` as the grokbot user |
+| `start`, `stop`, `restart` | yes | control the service |
+| `status`, `logs [-f]` | no | `systemctl status`, `journalctl` |
+| `enable`, `disable` | yes | start at boot or not |
+| `update` | yes | `git pull --ff-only` in the source clone, recopy, `npm ci`, restart; env and `agents.json` kept |
+| `bdk-check` | no | installed vs npm latest `@cursor/bdk`, with links |
+| `bdk-upgrade [--pin]` | yes | `npm install @cursor/bdk@latest` in `/opt`, `bdk validate`, restart only if it passes, else roll back. `--pin` writes `relay/package*.json` into the source clone so you can open a PR |
+| `agents list` | group | allowed names |
+| `agents add NAME`, `agents remove NAME`, `agents edit` | yes | change `agents.json` and restart; an empty list is refused |
+| `doctor` | best as root | node, files and permissions, service, port on 127.0.0.1, login (`bdk whoami`), bdk version |
+| `connect-claude [--scope user\|local]` | no (grokbot group) | register the relay in Claude Code |
+| `version`, `help` | no | |
+
 Notes:
-- `connect-claude.sh` stores a `bash -c` command that reads `/etc/grokbot-relay/env` at start, so the token is **not** written into Claude Code's config (`~/.claude.json`). If you use `claude mcp add` with the token inline instead, it is stored there in plain text.
+- `connect-claude` stores a `bash -c` command that reads `/etc/grokbot-relay/env` at start, so the token is **not** written into Claude Code's config (`~/.claude.json`). If you use `claude mcp add` with the token inline instead, it is stored there in plain text.
 - The token is still passed as a process argument (`--bearer-token`), so other local users may see it in `ps`. On a shared server, mount `/proc` with `hidepid=2` or accept that group members and admins can see it.
 - Everyone in the `grokbot` group shares one token, so they share one BDK caller identity (contact list and read positions) and the same Grok Bot account.
-- Rotate the token: edit the env file, `sudo systemctl restart grokbot-relay`, users re-run nothing (it is read at each start).
+- Rotate the token: edit the env file, `sudo grokbot-relay restart`, users re-run nothing (it is read at each start).
 
 **VERIFY ON THE SERVER**
 - `bdk serve` flags in the unit: `--host 127.0.0.1 --port`, `--mode single` (MCP at `/v1/mcp`), `--bearer-token` (from the 0.2.25 CLI reference, not run yet).
-- Whether the `bdk login` credential (stored in the CLI config dir under `/var/lib/grokbot`) survives reboot and works under the hardened unit.
+- Whether `doctor`'s login check (`bdk whoami`) works, and whether the `bdk login` credential (stored in the CLI config dir under `/var/lib/grokbot`) survives reboot and works under the hardened unit.
 - That `bdk login` works on a headless server (it prints a sign-in link to open in any browser).
 
 ## Safety
