@@ -256,7 +256,7 @@ cmd_install() {
     [[ "$port" != "$want" ]] && info "Port $want is already in use; using $port instead."
     local token
     token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-    ( umask 077; printf 'GROKBOT_RELAY_PORT=%s\nGROKBOT_RELAY_TOKEN=%s\n' "$port" "$token" > "$ENV_FILE" )
+    ( umask 077; printf 'GROKBOT_RELAY_PORT=%s\nGROKBOT_RELAY_TOKEN=%s\n# Sender tag stamped on every relayed message as [relay:<tag>] (letters, digits, . _ -)\n# GROKBOT_RELAY_SENDER_TAG=claude-code\n' "$port" "$token" > "$ENV_FILE" )
     unset token
     info "Created $ENV_FILE (token not shown)."
   else
@@ -642,6 +642,10 @@ cmd_doctor() {
   if [[ -r "$ENV_FILE" ]]; then
     local port; port="$(env_value GROKBOT_RELAY_PORT)"
     [[ -n "$(env_value GROKBOT_RELAY_TOKEN)" ]] && pass "token set (not shown)" || bad "token missing in $ENV_FILE"
+    local tag; tag="$(env_value GROKBOT_RELAY_SENDER_TAG)"
+    if [[ -z "$tag" ]]; then note "sender header: [relay:claude-code] (default; set GROKBOT_RELAY_SENDER_TAG in $ENV_FILE)"
+    elif [[ "$tag" =~ ^[A-Za-z0-9._-]{1,40}$ ]]; then pass "sender header: [relay:$tag]"
+    else bad "GROKBOT_RELAY_SENDER_TAG '$tag' is invalid (letters, digits, . _ -; max 40); falling back to claude-code"; fi
     if command -v ss >/dev/null; then
       if ss -ltn "sport = :$port" | grep -q "127.0.0.1:$port"; then pass "listening on 127.0.0.1:$port"
       elif ss -ltn "sport = :$port" | grep -q ":$port"; then bad "port $port is listening but not only on 127.0.0.1"

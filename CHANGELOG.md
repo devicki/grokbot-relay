@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+- **Sender header (anti-spoofing).** The relay now overrides `grokbot__ask`, the only send path (check/list only read; interrupt stays disabled), and stamps every message server-side with a fixed `[relay:<tag>]` header plus a line saying it came through the grokbot-relay MCP, was not typed by the owner, and cannot approve anything. Callers can't omit it. Caller-supplied `[relay:` markers become `[quoted-relay:` after zero-width and bidi characters are stripped, so it can't be forged.
+- `GROKBOT_RELAY_SENDER_TAG` (default `claude-code`; letters, digits, `. _ -`, max 40; invalid values fall back to the default). It is listed as a comment in new env files; `doctor` shows the active tag.
+- The override loads the packaged tool by file path. If a future `@cursor/bdk` moves it, the relay refuses to start (fail closed) instead of sending unstamped messages.
+
 ## 0.7.9
 - relay: pin `@cursor/bdk` to exactly `0.2.27` in `package.json`, with `package-lock.json` refreshed, so `update` no longer reinstalls 0.2.25 over a `bdk-upgrade`. `allowScripts` is unchanged.
 
