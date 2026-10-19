@@ -362,7 +362,39 @@ t_node_up()  { ui_root_or_msg && ui_yesno "Refresh the private Node runtime to t
 t_bdk_check(){ ui_run "bdk-check" cmd_bdk_check; }
 t_bdk_up()   { ui_root_or_msg && ui_yesno "Upgrade @cursor/bdk to the latest version?\nIt is validated first; on failure it rolls back." && ui_run "bdk-upgrade" cmd_bdk_upgrade; }
 t_doctor()   { ui_run "doctor" cmd_doctor; }
-t_connect()  { ui_msg "Regular users connect Claude Code like this:\n\n  1) Admin: sudo usermod -aG grokbot <user>\n  2) User logs out and back in\n  3) User runs: grokbot-relay connect-claude\n  4) claude plugin marketplace add devicki/dev-toolkit\n     claude plugin install grokbot-relay@dev-toolkit\n\nThe token is read from /etc/grokbot-relay/env at each start; it is not stored in Claude Code's config."; }
+# Connect guide: "Done by admin" (what this run did) + "Each user does" (copyable commands).
+U_ADDED=()
+t_connect() {
+  local -a mem=(); local n
+  while IFS= read -r n; do [[ -n "$n" ]] && mem+=("$n"); done < <(group_members 2>/dev/null)
+  local added="${U_ADDED[*]}"
+  local -a cmds=("grokbot-relay connect-claude" "claude plugin marketplace add devicki/dev-toolkit" "claude plugin install grokbot-relay@dev-toolkit")
+  if [[ "$UI" != gum ]]; then
+    local txt="Done by admin\n"
+    [[ -n "$added" ]] && txt+="  [ok] added to group $SVC_USER: $added\n"
+    txt+="  [ok] members: ${mem[*]:-(none yet)}\n\nEach user does\n  1. Log out and log back in.\n  2. Register the relay:\n       ${cmds[0]}\n  3. Install the plugin:\n       ${cmds[1]}\n       ${cmds[2]}\n\nThe token stays in /etc/grokbot-relay/env; Claude Code never stores it."
+    ui_msg "$txt"; return 0
+  fi
+  local ok h code dim
+  ok="$(g_style --foreground "$C_OK" --bold "✓")"
+  h() { g_style --foreground "$C_VIOLET" --bold "$1"; }
+  code() { g_style --foreground "$C_CYAN" --background "#1F2937" --padding "0 1" --margin "0 0 0 5" "$1"; }
+  dim() { g_style --foreground "$C_DIM" "$1"; }
+  local body
+  body="$(
+    h "Done by admin"
+    [[ -n "$added" ]] && printf '  %s added to %s: %s\n' "$ok" "$SVC_USER" "$added"
+    printf '  %s members: %s\n\n' "$ok" "${mem[*]:-(none yet)}"
+    h "Each user does"
+    printf '  1. Log out and log back in.\n'
+    printf '  2. Register the relay:\n'; code "${cmds[0]}"
+    printf '  3. Install the plugin:\n'; code "${cmds[1]}"; code "${cmds[2]}"
+    echo; dim "  Token stays in /etc/grokbot-relay/env; Claude Code never stores it."
+  )"
+  ui_header
+  g_style --border rounded --border-foreground "$C_VIOLET2" --padding "0 1" --margin "0 1" "$body"
+  g_wait
+}
 t_uninstall() {
   ui_root_or_msg || return 1
   local mode
@@ -398,6 +430,44 @@ t_agents_remove() {
   ui_run "agents remove" cmd_agents remove "$n"
 }
 t_agents_edit() { ui_root_or_msg && ui_shell "agents edit" cmd_agents edit; }
+
+# grokbot group: multi-select regular accounts (members pre-checked), manual names, confirm removals.
+t_users_pick() {
+  ui_root_or_msg || return 1
+  getent group "$SVC_USER" >/dev/null || { ui_msg "Group $SVC_USER does not exist yet. Install first."; return 0; }
+  local -a cur=() cand=(); local n
+  while IFS= read -r n; do [[ -n "$n" ]] && cur+=("$n"); done < <(group_members)
+  local -A seen=(); while IFS= read -r n; do [[ -n "$n" && -z "${seen[$n]:-}" ]] && { seen[$n]=1; cand+=("$n"); }; done < <(users_candidates; printf '%s\n' "${cur[@]}")
+  local pre; pre="$(IFS=,; echo "${cur[*]}")"
+  while true; do
+    local chosen=""
+    nav_clear
+    if (( ${#cand[@]} )); then
+      chosen="$(ui_multi "Users in group $SVC_USER can connect Claude Code to the relay.\nChecked = member. Unchecking a member removes them (you'll be asked first)." "$pre" "${cand[@]}")" || { nav_is_set && return 1; return 0; }
+    fi
+    local extra; extra="$(ui_input "More usernames, comma- or space-separated (leave empty to skip):" "")" || extra=""
+    nav_is_set && return 1
+    local -A want=(); local -a bad=()
+    while IFS= read -r n; do [[ -n "$n" ]] && want[$n]=1; done <<<"$chosen"
+    for n in $(tr ',' ' ' <<<"$extra"); do if user_valid "$n"; then want[$n]=1; else bad+=("$n"); fi; done
+    if (( ${#bad[@]} )); then ui_msg "No such user: ${bad[*]}\nNothing changed; try again."; continue; fi
+    local -a add=() del=()
+    for n in "${!want[@]}"; do printf '%s\n' "${cur[@]}" | grep -qxF "$n" || add+=("$n"); done
+    for n in "${cur[@]}"; do [[ -n "${want[$n]:-}" ]] || del+=("$n"); done
+    if (( ${#del[@]} )); then
+      if ! ui_yesno "Remove from group $SVC_USER: ${del[*]}?\nThey will lose access to the relay."; then
+        nav_is_set && return 1
+        del=()
+      fi
+    fi
+    local out="" ok
+    for n in "${add[@]}"; do if usermod -aG "$SVC_USER" "$n" 2>/dev/null; then ok="added"; U_ADDED+=("$n"); else ok="FAILED to add"; fi; out+="  $ok: $n\n"; done
+    for n in "${del[@]}"; do if gpasswd -d "$n" "$SVC_USER" >/dev/null 2>&1; then ok="removed"; else ok="FAILED to remove"; fi; out+="  $ok: $n\n"; done
+    [[ -n "$out" ]] || out="  no changes\n"
+    ui_msg "Group $SVC_USER:\n$out\nMembers now: $(group_members | paste -sd' ' -)\n\nUsers must log out and back in for the change to apply."
+    return 0
+  done
+}
 
 # Pick the allowlist: account bots (when an API exists) + current names, multi-select, then manual names.
 t_agents_pick() {
@@ -466,6 +536,7 @@ MAIN_MENU=(
   "update|↻  Update grokbot-relay|t_update"
   "bdk|⬢  Cursor BDK · Node runtime|t_bdk"
   "wizard|✦  Setup wizard|tui_wizard"
+  "users|☺  Group users (who may connect)|t_users_pick"
   "connect|⌁  Connect Claude Code|t_connect"
   "about|ⓘ  About|t_about"
   "uninstall|▲  Uninstall|t_uninstall"
@@ -520,11 +591,7 @@ w_login()  { ui_yesno "Sign in to Cursor now? (needed before the relay can reach
 w_start()  { ui_yesno "Start the relay now?" && ui_run "start" cmd_svc start; return 0; }
 w_doctor() { ui_run "doctor" cmd_doctor; return 0; }
 w_users() {
-  while ui_yesno "Add a regular user to the grokbot group (so they can connect Claude Code)?"; do
-    local u; u="$(ui_input "Username:" "")" || break
-    [[ -n "$u" ]] || break
-    if id "$u" >/dev/null 2>&1; then ui_run "usermod" usermod -aG "$SVC_USER" "$u"; else ui_msg "No such user: $u"; fi
-  done
+  t_users_pick || true
   nav_is_set && return 1
   t_connect
 }

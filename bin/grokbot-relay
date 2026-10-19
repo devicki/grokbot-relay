@@ -541,6 +541,41 @@ cmd_agents() {
   esac
 }
 
+# ---------------------------------------------------------------- users (grokbot group)
+# Regular local accounts: UID >= 1000, not nobody/65534, with a real login shell.
+users_candidates() {
+  getent passwd | awk -F: '$3>=1000 && $3!=65534 && $1!="nobody" && $7!~/(nologin|false|sync|halt|shutdown)$/ && $7!="" {print $1}' | sort -u
+}
+group_members() { getent group "$SVC_USER" | awk -F: '{print $4}' | tr ',' '\n' | sed '/^$/d' | sort -u; }
+user_valid() { [[ "$1" =~ ^[a-z_][a-z0-9_.-]*\$?$ ]] && id "$1" >/dev/null 2>&1; }
+
+cmd_users() {
+  local sub="${1:-list}"; shift || true
+  case "$sub" in
+    list)
+      echo "Members of group $SVC_USER:"; group_members | sed 's/^/  /'
+      echo "Regular local accounts:"; users_candidates | sed 's/^/  /' ;;
+    pick)
+      need_root "users pick"
+      [[ -t 0 && -t 1 ]] || die "users pick needs a terminal; use: users add NAME..."
+      load_tui; t_users_pick ;;
+    add|remove)
+      need_root "users $sub"
+      (( $# )) || die "usage: grokbot-relay users $sub NAME [NAME...]   (commas allowed)"
+      getent group "$SVC_USER" >/dev/null || die "Group $SVC_USER does not exist (sudo grokbot-relay install)."
+      local -a names=(); local n bad=0
+      read -r -a names <<<"$(tr ',' ' ' <<<"$*")"
+      for n in "${names[@]}"; do user_valid "$n" || { echo "No such user: $n" >&2; bad=1; }; done
+      (( bad )) && die "Nothing changed."
+      for n in "${names[@]}"; do
+        if [[ $sub == add ]]; then usermod -aG "$SVC_USER" "$n" && info "added $n to $SVC_USER"
+        else gpasswd -d "$n" "$SVC_USER" >/dev/null && info "removed $n from $SVC_USER"; fi
+      done
+      info "Users must log out and back in for group changes to apply." ;;
+    *) die "usage: grokbot-relay users list|pick|add NAME...|remove NAME..." ;;
+  esac
+}
+
 # ---------------------------------------------------------------- doctor
 cmd_doctor() {
   local ok=0 warn=0
@@ -733,6 +768,7 @@ Other
   uninstall [--purge|--keep-config] [-y]  remove service, /opt app, CLI link (root);
                             asks before config, login/state, and the grokbot user
   doctor                    health checks (node, service, files, port, login, bdk)
+  users list|pick|add NAME...|remove NAME...   grokbot group members (root for changes)
   connect-claude [--scope user|local]   register the relay in Claude Code (regular user in grokbot group)
   version | help
 H
@@ -755,6 +791,7 @@ main() {
     bdk-check) cmd_bdk_check ;;
     bdk-upgrade) cmd_bdk_upgrade "$@" ;;
     agents) cmd_agents "$@" ;;
+    users) cmd_users "$@" ;;
     doctor) cmd_doctor ;;
     uninstall) cmd_uninstall "$@" ;;
     node-upgrade) cmd_node_upgrade ;;

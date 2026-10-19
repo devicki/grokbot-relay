@@ -125,6 +125,7 @@ claude plugin install grokbot-relay@dev-toolkit
 - 위저드 키: **Esc** = 이전 단계 (1단계에서는 종료 확인) · **Ctrl+C** = 확인 후 종료 (다음 단계로 넘어가지 않음). plain 모드는 `b` 뒤로, `q` 종료. 다시 이어서 하려면 `sudo grokbot-relay install --tui`를 실행하세요.
 - 봇을 제거하거나 체크 해제해도 **이 relay의 허용 목록**에서만 빠집니다. Grok Bot 앱의 실제 봇은 삭제되지 않습니다(uninstall도 마찬가지).
 - 헤드리스 서버 / SSH: `login`은 로그인 URL을 출력하고 기다립니다. 아무 컴퓨터의 브라우저에서 열어 로그인하면 명령이 자동으로 끝납니다. "Opening your browser" 문구는 무시해도 됩니다. 브라우저를 쓸 수 없다면 Cursor 대시보드에서 발급한 키로 `bdk login --api-key <key>`를 사용하세요.
+- 그룹 사용자(위저드 8단계, 메뉴 "Group users", 또는 `sudo grokbot-relay users pick`): 일반 계정을 여러 개 선택할 수 있고(기존 멤버는 미리 체크됨), 쉼표나 공백으로 구분해 이름을 추가로 입력할 수 있습니다. 기존 멤버를 체크 해제하면 확인 후 그룹에서 제거됩니다. 비대화형으로는 `users list | add NAME... | remove NAME...`을 쓰세요. 변경 후 해당 사용자는 다시 로그인해야 적용됩니다. 마지막 안내 화면에는 관리자가 한 일과 각 사용자가 실행할 명령이 정리되어 나옵니다.
 - 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
 
 ## CLI

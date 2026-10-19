@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.7
+- Wizard step 8 (Group users) and the new TUI menu item "Group users" offer a multi-select of regular local accounts (UID ≥ 1000, a real login shell, not nobody) with current `grokbot` members pre-checked. A manual field takes comma- or space-separated names, each validated with `id`. Unchecking a member removes them with `gpasswd -d`, after a confirmation. A summary follows, with a reminder to log out and back in.
+- New CLI: `grokbot-relay users list|pick|add NAME...|remove NAME...`.
+- Esc = back and Ctrl+C = quit, as in the other steps. Works in gum, whiptail and plain modes.
+- The "Connect Claude Code" guide is reworked into "Done by admin" (✓ users added, current members) and "Each user does" (one short line per step, commands as highlighted copyable code lines), plus a one-line token note.
+
 ## 0.7.6
 - `status` and the wizard/TUI start/restart output now color systemd's `Active:` line: green = active (running), red = failed, yellow = inactive, activating or anything else.
 - Color is off with `NO_COLOR` or `--plain`, and when output is not a terminal (whiptail boxes and pipes stay plain). The gum result box keeps the embedded color.
