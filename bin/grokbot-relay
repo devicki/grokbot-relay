@@ -192,6 +192,23 @@ npm_ci() {
     as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund"
   fi
   npm_rebuild
+  header_check
+}
+
+# Sender header: tools/ask.ts wraps the packaged grokbot__ask by file path. If a bdk
+# upgrade moved that file, set the overlay aside so the stock ask tool is used
+# (relay still starts, messages go without the header) and doctor warns.
+HEADER_OVERLAY="bot/extensions/grokbot/tools/ask.ts"
+HEADER_STOCK="node_modules/@cursor/bdk/dist/extensions/cursor-grokbot-agents/tools/ask.js"
+HEADER_PARKED="ask.ts.header-disabled"
+header_check() {
+  if [[ -f "$RELAY_DIR/$HEADER_STOCK" ]]; then
+    [[ -f "$RELAY_DIR/$HEADER_PARKED" && ! -f "$RELAY_DIR/$HEADER_OVERLAY" ]] && mv "$RELAY_DIR/$HEADER_PARKED" "$RELAY_DIR/$HEADER_OVERLAY"
+    rm -f "$RELAY_DIR/$HEADER_PARKED"
+    return 0
+  fi
+  [[ -f "$RELAY_DIR/$HEADER_OVERLAY" ]] && mv "$RELAY_DIR/$HEADER_OVERLAY" "$RELAY_DIR/$HEADER_PARKED"
+  echo "WARNING: sender header disabled: this @cursor/bdk has no $HEADER_STOCK. Messages go without [relay:claude-code] (stock ask tool). Update grokbot-relay or pin a working bdk." >&2
 }
 
 # npm 11.16+ gates dependency install scripts on package.json "allowScripts"
@@ -256,7 +273,7 @@ cmd_install() {
     [[ "$port" != "$want" ]] && info "Port $want is already in use; using $port instead."
     local token
     token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-    ( umask 077; printf 'GROKBOT_RELAY_PORT=%s\nGROKBOT_RELAY_TOKEN=%s\n# Sender tag stamped on every relayed message as [relay:<tag>] (letters, digits, . _ -)\n# GROKBOT_RELAY_SENDER_TAG=claude-code\n' "$port" "$token" > "$ENV_FILE" )
+    ( umask 077; printf 'GROKBOT_RELAY_PORT=%s\nGROKBOT_RELAY_TOKEN=%s\n' "$port" "$token" > "$ENV_FILE" )
     unset token
     info "Created $ENV_FILE (token not shown)."
   else
@@ -413,6 +430,7 @@ cmd_bdk_upgrade() {
   step "Upgrading $NPM_PKG ($old → latest)" as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund --loglevel=error $NPM_PKG@latest" \
     || die "npm install failed; nothing changed in the running service."
   step "Rebuilding native deps" npm_rebuild || true
+  header_check
   new="$(installed_bdk)"
   if validate_relay; then
     info "bdk validate passed ($old -> $new)."
@@ -635,6 +653,11 @@ cmd_doctor() {
     else bad "$f missing"; fi
   done
 
+  if [[ -d "$RELAY_DIR" ]]; then
+    if [[ -f "$RELAY_DIR/$HEADER_OVERLAY" && -f "$RELAY_DIR/$HEADER_STOCK" ]]; then pass "sender header [relay:claude-code] on"
+    else bad "sender header OFF: messages go without [relay:claude-code] (bdk moved its ask tool; sudo grokbot-relay update)"; fi
+  fi
+
   if [[ -r "$AGENTS_FILE" ]]; then
     agents_check_nonempty && pass "agents list not empty ($(agents_js list | wc -l))" || bad "agents list empty (relay refuses to start)"
   else note "cannot read $AGENTS_FILE without root/grokbot group"; fi
@@ -642,10 +665,6 @@ cmd_doctor() {
   if [[ -r "$ENV_FILE" ]]; then
     local port; port="$(env_value GROKBOT_RELAY_PORT)"
     [[ -n "$(env_value GROKBOT_RELAY_TOKEN)" ]] && pass "token set (not shown)" || bad "token missing in $ENV_FILE"
-    local tag; tag="$(env_value GROKBOT_RELAY_SENDER_TAG)"
-    if [[ -z "$tag" ]]; then note "sender header: [relay:claude-code] (default; set GROKBOT_RELAY_SENDER_TAG in $ENV_FILE)"
-    elif [[ "$tag" =~ ^[A-Za-z0-9._-]{1,40}$ ]]; then pass "sender header: [relay:$tag]"
-    else bad "GROKBOT_RELAY_SENDER_TAG '$tag' is invalid (letters, digits, . _ -; max 40); falling back to claude-code"; fi
     if command -v ss >/dev/null; then
       if ss -ltn "sport = :$port" | grep -q "127.0.0.1:$port"; then pass "listening on 127.0.0.1:$port"
       elif ss -ltn "sport = :$port" | grep -q ":$port"; then bad "port $port is listening but not only on 127.0.0.1"

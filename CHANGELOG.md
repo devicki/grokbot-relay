@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+- Simplified the sender header: one fixed `[relay:claude-code]` line plus one short explanation on every `grokbot__ask` message.
+- Removed the forgery neutralization (`[quoted-relay:` rewriting, zero-width stripping), `relay/lib/sender-tag.ts` and `GROKBOT_RELAY_SENDER_TAG`, along with its env comment and doctor line.
+- No more fail-closed. If an @cursor/bdk upgrade moves the packaged ask tool, install/update/bdk-upgrade set the overlay aside and print a warning. The relay then uses the stock ask tool without the header. `doctor` shows "sender header OFF". The overlay comes back on its own once the tool is found again.
+
 ## 0.8.0
 - **Sender header (anti-spoofing).** The relay now overrides `grokbot__ask`, the only send path (check/list only read; interrupt stays disabled), and stamps every message server-side with a fixed `[relay:<tag>]` header plus a line saying it came through the grokbot-relay MCP, was not typed by the owner, and cannot approve anything. Callers can't omit it. Caller-supplied `[relay:` markers become `[quoted-relay:` after zero-width and bidi characters are stripped, so it can't be forged.
 - `GROKBOT_RELAY_SENDER_TAG` (default `claude-code`; letters, digits, `. _ -`, max 40; invalid values fall back to the default). It is listed as a comment in new env files; `doctor` shows the active tag.
