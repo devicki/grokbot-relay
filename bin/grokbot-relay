@@ -15,6 +15,7 @@ UNIT_NAME=grokbot-relay.service
 UNIT="/etc/systemd/system/$UNIT_NAME"
 SVC_USER=grokbot
 NPM_PKG=@cursor/bdk
+export NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false
 
 die() { echo "grokbot-relay: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
@@ -62,12 +63,25 @@ copy_app() { # $1 = source repo root
   chmod 755 "$APP_DIR" "$APP_DIR/bin" "$APP_DIR/bin/grokbot-relay"
 }
 
+NPM_ENV="NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false"
 npm_ci() {
   if [[ -f "$RELAY_DIR/package-lock.json" ]]; then
-    as_svc "cd '$RELAY_DIR' && npm ci --no-audit --no-fund"
+    as_svc "cd '$RELAY_DIR' && $NPM_ENV npm ci --no-audit --no-fund"
   else
-    as_svc "cd '$RELAY_DIR' && npm install --no-audit --no-fund"
+    as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund"
   fi
+  npm_rebuild
+}
+
+# Newer npm versions can skip dependency install scripts. esbuild needs its
+# postinstall (native binary check) and protobufjs its own; run them explicitly.
+npm_rebuild() {
+  as_svc "cd '$RELAY_DIR' && $NPM_ENV npm rebuild --ignore-scripts=false --foreground-scripts=false esbuild protobufjs" >/dev/null \
+    || echo "warning: npm rebuild esbuild protobufjs failed; run: sudo grokbot-relay doctor" >&2
+}
+
+esbuild_ok() {
+  as_svc "cd '$RELAY_DIR' && node -e \"require('esbuild').transformSync('let a=1')\"" >/dev/null 2>&1
 }
 
 validate_relay() {
@@ -89,6 +103,7 @@ cmd_install() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --port) port="${2:?--port needs a number}"; shift 2 ;;
+      --tui) load_tui; tui_wizard; return ;;
       *) die "install: unknown option $1" ;;
     esac
   done
@@ -215,9 +230,10 @@ cmd_bdk_upgrade() {
   bak="$(mktemp -d)"
   cp "$RELAY_DIR/package.json" "$RELAY_DIR/package-lock.json" "$bak/" 2>/dev/null || true
   info "Upgrading $NPM_PKG ($old -> latest)"
-  if ! as_svc "cd '$RELAY_DIR' && npm install --no-audit --no-fund $NPM_PKG@latest"; then
+  if ! as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund $NPM_PKG@latest"; then
     die "npm install failed; nothing changed in the running service."
   fi
+  npm_rebuild
   new="$(installed_bdk)"
   if validate_relay; then
     info "bdk validate passed ($old -> $new)."
@@ -323,6 +339,9 @@ cmd_doctor() {
 
   [[ -d "$RELAY_DIR/node_modules" ]] && pass "app installed in $RELAY_DIR" || bad "app not installed (sudo grokbot-relay install)"
   note "$NPM_PKG $(installed_bdk) (latest check: grokbot-relay bdk-check)"
+  if [[ $EUID -eq 0 && -d "$RELAY_DIR/node_modules" ]]; then
+    esbuild_ok && pass "esbuild works" || bad "esbuild broken (fix: sudo grokbot-relay update, or npm rebuild esbuild protobufjs in $RELAY_DIR as grokbot)"
+  else note "esbuild check needs root"; fi
 
   systemctl is-enabled --quiet "$UNIT_NAME" 2>/dev/null && pass "service enabled at boot" || note "service not enabled at boot"
   systemctl is-active --quiet "$UNIT_NAME" 2>/dev/null && pass "service running" || bad "service not running"
@@ -374,12 +393,18 @@ cmd_connect_claude() {
   echo "Registered MCP server 'grokbot' (scope: $scope). Check with: claude mcp list"
 }
 
+load_tui() {
+  # shellcheck source=lib/tui.sh
+  . "$(self_dir)/lib/tui.sh"
+}
+
 cmd_help() {
   cat <<'H'
 grokbot-relay: install and operate the Grok Bot relay (Cursor BDK) service
 
 Setup (root)
-  install [--port N]        install or reinstall (user, /opt app, env, agents.json, systemd unit)
+  (no args) | tui           open the menu (TUI) on a terminal; uses whiptail/dialog if present
+  install [--port N] [--tui]  install or reinstall; --tui runs the setup wizard (user, /opt app, env, agents.json, systemd unit)
   login                     Cursor sign-in as the grokbot user (bdk login)
   update                    git pull the source clone, recopy, npm ci, restart; keeps env/agents
 Service (root, except status/logs)
@@ -404,8 +429,12 @@ H
 }
 
 main() {
-  local cmd="${1:-help}"; shift || true
+  local cmd="${1:-}"; shift || true
+  if [[ -z "$cmd" ]]; then
+    if [[ -t 0 && -t 1 ]]; then cmd=tui; else cmd=help; fi
+  fi
   case "$cmd" in
+    tui) load_tui; tui_main ;;
     install) cmd_install "$@" ;;
     login) cmd_login ;;
     start|stop|restart|enable|disable) cmd_svc "$cmd" ;;

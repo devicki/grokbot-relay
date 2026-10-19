@@ -74,7 +74,7 @@ claude plugin install grokbot-relay@dev-toolkit
 ```bash
 node -v                                   # v22 이상
 git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
-sudo ./bin/grokbot-relay install          # 또는 sudo ./deploy/install.sh, 선택: --port 3000
+sudo ./bin/grokbot-relay install --tui    # 마법사. 비대화식: install [--port N]
 sudo grokbot-relay agents add "Feedhand"  # 내 봇 이름, 앱에 보이는 그대로 (또는 agents edit)
 sudo grokbot-relay agents remove "Research Bot"   # 예시 이름 빼기
 sudo grokbot-relay login                  # grokbot 계정으로 Cursor 로그인
@@ -102,13 +102,22 @@ claude plugin marketplace add devicki/dev-toolkit
 claude plugin install grokbot-relay@dev-toolkit
 ```
 
+## TUI
+
+터미널에서 `sudo grokbot-relay`를 인자 없이 실행하면 메뉴가 열립니다. `whiptail`이나 `dialog`가 있으면 그 화면을 쓰고(`sudo apt install whiptail`), 없으면 번호 입력 메뉴로 동작합니다.
+
+- 처음 실행(아직 설치 전): **설치 마법사**를 권합니다. 환영 → Node.js 확인 → 포트 → 설치 → 봇 이름(내 봇 추가, 예시 `Research Bot` 삭제, 목록은 비울 수 없음) → Cursor 로그인(링크 표시) → 시작 → doctor → 그룹 사용자 추가.
+- 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇(목록/추가/삭제/편집) · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK 확인/업그레이드 · 설치 마법사 · Claude Code 연결 안내 · 정보.
+- `sudo grokbot-relay install --tui`는 마법사를 바로 엽니다. 모든 하위 명령은 스크립트에서 그대로 쓸 수 있고, 터미널이 아니면 인자 없이 실행 시 도움말만 출력합니다.
+- 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
+
 ## CLI
 
 `install`이 `/usr/local/bin/grokbot-relay`를 `/opt/grokbot-relay/bin`의 사본으로 연결합니다. `update`에 쓰려고 원본 clone 경로를 `/etc/grokbot-relay/source`에 기록합니다. 토큰은 어떤 명령도 출력하지 않습니다.
 
 | 명령 | root | 내용 |
 |---|---|---|
-| `install [--port N]` | 필요 | 계정, `/opt` 앱, `npm ci`, env(토큰은 처음 한 번만 생성), `agents.json`(없으면 예시로 생성), systemd 유닛 enable (시작은 안 함) |
+| `install [--port N] [--tui]` | 필요 | 계정, `/opt` 앱, `npm ci`, env(토큰은 처음 한 번만 생성), `agents.json`(없으면 예시로 생성), systemd 유닛 enable (시작은 안 함) |
 | `login` | 필요 | grokbot 계정으로 `bdk login` |
 | `start`, `stop`, `restart` | 필요 | 서비스 제어 |
 | `status`, `logs [-f]` | 불필요 | `systemctl status`, `journalctl` |
@@ -120,6 +129,7 @@ claude plugin install grokbot-relay@dev-toolkit
 | `agents add NAME`, `agents remove NAME`, `agents edit` | 필요 | `agents.json` 수정 후 재시작. 빈 목록은 거부 |
 | `doctor` | root 권장 | node, 파일과 권한, 서비스, 127.0.0.1 포트, 로그인(`bdk whoami`), bdk 버전 |
 | `connect-claude [--scope user\|local]` | 불필요 (grokbot 그룹) | Claude Code에 중계 등록 |
+| (인자 없음), `tui` | | 터미널 메뉴 |
 | `version`, `help` | 불필요 | |
 
 참고:

@@ -74,7 +74,7 @@ Admin (root):
 ```bash
 node -v                                   # v22+
 git clone https://github.com/devicki/grokbot-relay && cd grokbot-relay
-sudo ./bin/grokbot-relay install          # or: sudo ./deploy/install.sh ; optional --port 3000
+sudo ./bin/grokbot-relay install --tui    # wizard; or non-interactive: install [--port N]
 sudo grokbot-relay agents add "Feedhand"  # your bot names, exactly as in the app (or: agents edit)
 sudo grokbot-relay agents remove "Research Bot"   # drop the example name
 sudo grokbot-relay login                  # Cursor sign-in as the grokbot user
@@ -102,13 +102,22 @@ claude plugin marketplace add devicki/dev-toolkit
 claude plugin install grokbot-relay@dev-toolkit
 ```
 
+## TUI
+
+Run `sudo grokbot-relay` (no arguments) on a terminal to open a menu. It uses `whiptail` or `dialog` if installed (`sudo apt install whiptail`), otherwise numbered prompts.
+
+- First run (not installed yet): offers the **setup wizard**: welcome, Node.js check, port, install, bot names (add yours, remove the example `Research Bot`; the list can't be empty), Cursor login (prints the sign-in link), start, doctor, add group users.
+- Main menu: Status · Start/stop/restart/logs · Bots (list/add/remove/edit) · Cursor login · Doctor · Update · Cursor BDK check/upgrade · Setup wizard · Connect Claude Code (info) · About.
+- `sudo grokbot-relay install --tui` forces the wizard. Every subcommand still works non-interactively for scripts; with no terminal, no-argument runs print help.
+- Adding a menu item is one line in `bin/lib/tui.sh` (`"id|label|function"` in `MAIN_MENU`, `WIZARD_STEPS`, …).
+
 ## CLI
 
 `install` links `/usr/local/bin/grokbot-relay` to the copy in `/opt/grokbot-relay/bin`. The source clone path is recorded in `/etc/grokbot-relay/source` for `update`. The token is never printed.
 
 | Command | Root | What |
 |---|---|---|
-| `install [--port N]` | yes | user, `/opt` app, `npm ci`, env (token made once), `agents.json` (from example if missing), systemd unit enabled but not started |
+| `install [--port N] [--tui]` | yes | user, `/opt` app, `npm ci`, env (token made once), `agents.json` (from example if missing), systemd unit enabled but not started |
 | `login` | yes | `bdk login` as the grokbot user |
 | `start`, `stop`, `restart` | yes | control the service |
 | `status`, `logs [-f]` | no | `systemctl status`, `journalctl` |
@@ -120,6 +129,7 @@ claude plugin install grokbot-relay@dev-toolkit
 | `agents add NAME`, `agents remove NAME`, `agents edit` | yes | change `agents.json` and restart; an empty list is refused |
 | `doctor` | best as root | node, files and permissions, service, port on 127.0.0.1, login (`bdk whoami`), bdk version |
 | `connect-claude [--scope user\|local]` | no (grokbot group) | register the relay in Claude Code |
+| (no args), `tui` | | menu on a terminal |
 | `version`, `help` | no | |
 
 Notes:
