@@ -20,6 +20,21 @@ ui_detect() {
 }
 UI=plain
 ui_detect
+
+# Fresh install: get gum before the first screen so the wizard opens in the gum UI.
+ui_bootstrap_gum() {
+  [[ "$UI" == gum || -n "${NO_COLOR:-}" || "${GRB_UI:-}" == plain || "${GRB_PLAIN:-0}" == 1 || "${GRB_UI:-}" == whiptail ]] && return 0
+  [[ $EUID -eq 0 && -t 1 ]] || return 0
+  install -d -m 755 "$APP_DIR" "$APP_DIR/bin"
+  printf 'Preparing the grokbot-relay UI (downloading gum %s) ' "$GUM_VERSION"
+  ( gum_fetch >/dev/null 2>&1 ) &
+  local pid=$! i=0; local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+  printf ' '
+  while kill -0 "$pid" 2>/dev/null; do printf '\b%s' "${frames[i++%10]}"; sleep 0.1; done
+  wait "$pid" || true
+  if [[ -x "$APP_DIR/bin/gum" ]]; then printf '\bdone\n'; else printf '\bfailed, using the classic menu\n'; sleep 1; fi
+  ui_detect
+}
 UI_TITLE="grokbot-relay"
 UI_H=20; UI_W=74
 UI_STEP=""   # wizard progress, e.g. "2/8 Node runtime"
@@ -411,6 +426,7 @@ WIZARD_STEPS=(
 )
 
 tui_wizard() {
+  ui_bootstrap_gum
   ui_root_or_msg || return 1
   local e id label fn i=0 total=${#WIZARD_STEPS[@]}
   for e in "${WIZARD_STEPS[@]}"; do
@@ -425,6 +441,7 @@ tui_wizard() {
 
 tui_main() {
   [[ -t 0 && -t 1 ]] || die "The TUI needs a terminal. See: grokbot-relay help"
+  ui_bootstrap_gum
   if [[ ! -d "$RELAY_DIR/node_modules" ]] && [[ $EUID -eq 0 ]]; then
     ui_yesno "grokbot-relay is not installed yet. Run the setup wizard?" && tui_wizard
   fi

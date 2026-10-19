@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- Fresh `install --tui` / first TUI run: download and verify gum before the first screen (with a plain spinner), so the wizard opens in the gum UI. whiptail/plain only if the download fails.
+
 ## 0.7.0
 - New TUI look built on charmbracelet/gum 2.0.2: dark neon palette (violet/cyan), rounded borders, relay wordmark, status header (online/offline, port, bot count, version), spinners for long steps, wizard progress `[n/8]` with a bar, English button labels.
 - `install`/`update` fetch the official gum release (x64/arm64), verify `checksums.txt`, and keep it in `/opt/grokbot-relay/bin/gum` (not on the global PATH). If that fails, whiptail/plain menus are used.
