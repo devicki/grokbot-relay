@@ -130,6 +130,7 @@ claude plugin install grokbot-relay@dev-toolkit
 | `doctor` | root 권장 | node, 파일과 권한, 서비스, 127.0.0.1 포트, 로그인(`bdk whoami`), bdk 버전 |
 | `connect-claude [--scope user\|local]` | 불필요 (grokbot 그룹) | Claude Code에 중계 등록 |
 | (인자 없음), `tui` | | 터미널 메뉴 |
+| `uninstall [--purge\|--keep-config] [-y]` | 필요 | 중계 삭제, 아래 참고 |
 | `version`, `help` | 불필요 | |
 
 참고:
@@ -142,6 +143,16 @@ claude plugin install grokbot-relay@dev-toolkit
 - 유닛의 `bdk serve` 옵션: `--host 127.0.0.1 --port`, `--mode single`(MCP 경로 `/v1/mcp`), `--bearer-token` (0.2.25 CLI 문서 기준, 아직 실행 안 함)
 - `doctor`의 로그인 확인(`bdk whoami`)이 동작하는지, `/var/lib/grokbot` 아래 CLI 설정에 저장되는 `bdk login` 정보가 재부팅 후에도 남고, 하드닝된 유닛에서도 읽히는지
 - 화면 없는 서버에서 `bdk login`이 로그인 링크를 출력해 다른 브라우저로 열 수 있는지
+
+### 삭제
+
+```bash
+sudo grokbot-relay uninstall                # 지울 목록 표시 → 진행 확인 → 설정·로그인·계정은 하나씩 물어봄
+sudo grokbot-relay uninstall --keep-config  # /etc/grokbot-relay(토큰, agents.json) 유지
+sudo grokbot-relay uninstall --purge -y     # 전부 삭제, 묻지 않음
+```
+
+서비스 유닛, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-relay`, `/etc/grokbot-relay/source`는 항상 지웁니다. 원본 clone은 건드리지 않습니다. TUI 메뉴(삭제, `YES` 입력으로 확인)에서도 할 수 있습니다.
 
 ## 안전
 

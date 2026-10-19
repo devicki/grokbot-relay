@@ -10,6 +10,16 @@ UI_TITLE="grokbot-relay"
 UI_H=20; UI_W=74
 
 # ---------------------------------------------------------------- primitives
+ui_danger() { # text -> 0 only if the user types YES
+  case "$UI" in
+    plain) local a; printf '\n!!! DANGER !!!\n%b\nType YES to continue: ' "$1"; read -r a </dev/tty; [[ "$a" == YES ]] ;;
+    *) local a
+       a="$(NEWT_COLORS='root=,red window=,red border=white,red textbox=white,red button=black,white' DIALOGRC='' \
+         "$UI" --title "DANGER: $UI_TITLE" --inputbox "$1\n\nType YES to continue:" "$UI_H" "$UI_W" "" 3>&1 1>&2 2>&3)" || return 1
+       [[ "$a" == YES ]] ;;
+  esac
+}
+
 ui_msg() { # text
   case "$UI" in
     plain) printf '\n%b\n\n' "$1"; read -r -p "[Enter] " _ </dev/tty ;;
@@ -113,6 +123,23 @@ t_bdk_check(){ ui_run "bdk-check" cmd_bdk_check; }
 t_bdk_up()   { ui_root_or_msg && ui_yesno "Upgrade @cursor/bdk to the latest version?\nIt is validated first; on failure it rolls back." && ui_run "bdk-upgrade" cmd_bdk_upgrade; }
 t_doctor()   { ui_run "doctor" cmd_doctor; }
 t_connect()  { ui_msg "Regular users connect Claude Code like this:\n\n  1) Admin: sudo usermod -aG grokbot <user>\n  2) User logs out and back in\n  3) User runs: grokbot-relay connect-claude\n  4) claude plugin marketplace add devicki/dev-toolkit\n     claude plugin install grokbot-relay@dev-toolkit\n\nThe token is read from /etc/grokbot-relay/env at each start; it is not stored in Claude Code's config."; }
+t_uninstall() {
+  ui_root_or_msg || return 1
+  local mode
+  mode="$(ui_menu "Uninstall grokbot-relay. The source clone is never touched." \
+    "ask|Remove service and app; ask about config, login, user" \
+    "keep|Remove service and app; keep config (token, agents.json)" \
+    "purge|Remove EVERYTHING (config, Cursor login, grokbot user)")" || return 0
+  ui_danger "This stops the relay and removes $UNIT, $APP_DIR and /usr/local/bin/grokbot-relay.\nMode: $mode" || { ui_msg "Cancelled."; return 0; }
+  case "$mode" in
+    ask)   ui_shell "uninstall" cmd_uninstall -y ;;
+    keep)  ui_shell "uninstall" cmd_uninstall -y --keep-config ;;
+    purge) ui_shell "uninstall" cmd_uninstall -y --purge ;;
+  esac
+  clear 2>/dev/null || true
+  echo "grokbot-relay was uninstalled. Exiting the menu."
+  exit 0
+}
 t_about()    { ui_msg "grokbot-relay $(read_version "$(script_root)")\n@cursor/bdk $(installed_bdk)\n\nhttps://github.com/devicki/grokbot-relay\nCLI help: grokbot-relay help"; }
 
 t_agents_list() { ui_run "agents" cmd_agents list; }
@@ -169,6 +196,7 @@ MAIN_MENU=(
   "wizard|Run setup wizard again|tui_wizard"
   "connect|Connect Claude Code (info)|t_connect"
   "about|About / version|t_about"
+  "uninstall|Uninstall (danger)|t_uninstall"
   "quit|Quit|back"
 )
 

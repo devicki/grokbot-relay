@@ -130,6 +130,7 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open a menu. It uses `w
 | `doctor` | best as root | node, files and permissions, service, port on 127.0.0.1, login (`bdk whoami`), bdk version |
 | `connect-claude [--scope user\|local]` | no (grokbot group) | register the relay in Claude Code |
 | (no args), `tui` | | menu on a terminal |
+| `uninstall [--purge\|--keep-config] [-y]` | yes | remove the relay; see below |
 | `version`, `help` | no | |
 
 Notes:
@@ -142,6 +143,16 @@ Notes:
 - `bdk serve` flags in the unit: `--host 127.0.0.1 --port`, `--mode single` (MCP at `/v1/mcp`), `--bearer-token` (from the 0.2.25 CLI reference, not run yet).
 - Whether `doctor`'s login check (`bdk whoami`) works, and whether the `bdk login` credential (stored in the CLI config dir under `/var/lib/grokbot`) survives reboot and works under the hardened unit.
 - That `bdk login` works on a headless server (it prints a sign-in link to open in any browser).
+
+### Uninstall
+
+```bash
+sudo grokbot-relay uninstall                # lists what goes, asks to proceed, then asks about config, login, user
+sudo grokbot-relay uninstall --keep-config  # keep /etc/grokbot-relay (token, agents.json)
+sudo grokbot-relay uninstall --purge -y     # remove everything, no prompts
+```
+
+Always removes the service unit, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-relay` and `/etc/grokbot-relay/source`. Never touches your source clone. Also in the TUI (Uninstall, type `YES` to confirm).
 
 ## Safety
 

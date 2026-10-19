@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.2
+- `grokbot-relay uninstall [--purge|--keep-config] [-y]`: stops/disables and removes the service, `/opt/grokbot-relay`, the CLI link and the recorded source path; asks before config, Cursor login/state and the grokbot user. Never touches the source clone. TUI entry with a danger confirmation (type YES).
+
 ## 0.5.1
 - `relay/package.json` declares `allowScripts` (npm 11.16+): esbuild and protobufjs allowed, @cursor/bdk (optional skill installer) denied. Older npm ignores the field. Fixes "install scripts not yet covered by allowScripts" during `npm ci`/`rebuild`.
 - Quieter rebuild after `npm ci`; clearer `doctor` message when esbuild does not work.
