@@ -13,7 +13,7 @@ ui_detect() {
   for g in "$(self_dir)/gum" "$APP_DIR/bin/gum"; do
     if [[ -x "$g" ]]; then GUM="$g"; break; fi
   done
-  if [[ -n "$GUM" && "${GRB_UI:-}" != whiptail ]]; then UI=gum; [[ -t 1 ]] && export CLICOLOR_FORCE=1
+  if [[ -n "$GUM" && "${GRB_UI:-}" != whiptail ]]; then UI=gum; [[ -t 1 ]] && export CLICOLOR_FORCE=1 GRB_COLOR=1
   elif command -v whiptail >/dev/null 2>&1; then UI=whiptail
   elif command -v dialog >/dev/null 2>&1; then UI=dialog
   else UI=plain; fi
@@ -178,7 +178,8 @@ ui_run() {
   else
     ui_header
     printf '  %s %s\n' "$(g_style --foreground "$color" --bold "$mark")" "$(g_style --foreground "$C_TEXT" --bold "$title")"
-    g_style --border rounded --border-foreground "$color" --foreground "$C_TEXT" --padding "0 1" --margin "0 1" "$out"
+    local -a fg=(--foreground "$C_TEXT"); [[ "$out" == *$'\e['* ]] && fg=()  # keep embedded colors (status "Active:")
+    g_style --border rounded --border-foreground "$color" "${fg[@]}" --padding "0 1" --margin "0 1" "$out"
     g_wait
   fi
   return "$rc"

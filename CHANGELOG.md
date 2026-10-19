@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.6
+- `status` and the wizard/TUI start/restart output now color systemd's `Active:` line: green = active (running), red = failed, yellow = inactive, activating or anything else.
+- Color is off with `NO_COLOR` or `--plain`, and when output is not a terminal (whiptail boxes and pipes stay plain). The gum result box keeps the embedded color.
+
 ## 0.7.5
 - Bot picker (wizard, TUI, `agents pick`), `agents remove`, the remove-a-bot menu and uninstall now state that unchecking or removing a bot only changes this relay's allowlist. Your bots in the Grok Bot app are never deleted.
 - Login: a headless/SSH hint. Per the `@cursor/bdk` 0.2.25 source, `bdk login` always prints the sign-in URL to stderr before it tries `xdg-open` (failures are ignored), then polls until sign-in finishes. Open the URL on any computer. `bdk login --api-key` is the no-browser alternative.

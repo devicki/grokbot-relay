@@ -306,8 +306,24 @@ cmd_login() {
   as_svc "cd '$RELAY_DIR' && ./node_modules/.bin/bdk login"
 }
 
-cmd_svc() { need_root "$1"; systemctl "$1" "$UNIT_NAME"; [[ "$1" == start || "$1" == restart ]] && systemctl --no-pager --lines=0 status "$UNIT_NAME" || true; }
-cmd_status() { systemctl --no-pager status "$UNIT_NAME" || true; }
+# Color the "Active:" line: green running, red failed, yellow inactive/activating/other.
+# Off with NO_COLOR or --plain; on for a terminal, or when the TUI captures output (GRB_COLOR=1).
+color_active() {
+  if [[ -n "${NO_COLOR:-}" || "${GRB_PLAIN:-0}" == 1 ]] || { [[ ! -t 1 ]] && [[ "${GRB_COLOR:-0}" != 1 ]]; }; then cat; return; fi
+  local e=$'\e' line c
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^[[:space:]]*Active: ]]; then
+      case "$line" in
+        *"active (running)"*) c=32 ;;
+        *failed*) c=31 ;;
+        *) c=33 ;;
+      esac
+      printf '%s[1;%sm%s%s[0m\n' "$e" "$c" "$line" "$e"
+    else printf '%s\n' "$line"; fi
+  done
+}
+cmd_svc() { need_root "$1"; systemctl "$1" "$UNIT_NAME"; [[ "$1" == start || "$1" == restart ]] && { systemctl --no-pager --lines=0 status "$UNIT_NAME" | color_active; } || true; }
+cmd_status() { { systemctl --no-pager status "$UNIT_NAME" || true; } | color_active; }
 cmd_logs() {
   local args=(-u "$UNIT_NAME" --no-pager -n 100)
   [[ "${1:-}" == "-f" ]] && args+=(-f)
