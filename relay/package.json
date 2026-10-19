@@ -3,8 +3,21 @@
   "private": true,
   "type": "module",
   "description": "Local BDK relay to the user's own Grok Bot agents.",
-  "scripts": { "check": "tsc --noEmit", "dev": "bdk dev" },
-  "dependencies": { "@cursor/bdk": "^0.2.25" },
-  "devDependencies": { "@types/node": "^22.14.0", "typescript": "6.0.3" },
-  "cursorAgentTemplate": "grokbot-agents"
+  "scripts": {
+    "check": "tsc --noEmit",
+    "dev": "bdk dev"
+  },
+  "dependencies": {
+    "@cursor/bdk": "^0.2.25"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "typescript": "6.0.3"
+  },
+  "cursorAgentTemplate": "grokbot-agents",
+  "allowScripts": {
+    "esbuild": true,
+    "protobufjs": true,
+    "@cursor/bdk": false
+  }
 }

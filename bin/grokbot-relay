@@ -73,10 +73,12 @@ npm_ci() {
   npm_rebuild
 }
 
-# Newer npm versions can skip dependency install scripts. esbuild needs its
-# postinstall (native binary check) and protobufjs its own; run them explicitly.
+# npm 11.16+ gates dependency install scripts on package.json "allowScripts"
+# (esbuild, protobufjs allowed; @cursor/bdk optional skill installer denied).
+# Older npm ignores the field and runs them anyway. Rebuild explicitly in case
+# an earlier install skipped them.
 npm_rebuild() {
-  as_svc "cd '$RELAY_DIR' && $NPM_ENV npm rebuild --ignore-scripts=false --foreground-scripts=false esbuild protobufjs" >/dev/null \
+  as_svc "cd '$RELAY_DIR' && $NPM_ENV npm rebuild --loglevel=error esbuild protobufjs" >/dev/null \
     || echo "warning: npm rebuild esbuild protobufjs failed; run: sudo grokbot-relay doctor" >&2
 }
 
@@ -340,7 +342,7 @@ cmd_doctor() {
   [[ -d "$RELAY_DIR/node_modules" ]] && pass "app installed in $RELAY_DIR" || bad "app not installed (sudo grokbot-relay install)"
   note "$NPM_PKG $(installed_bdk) (latest check: grokbot-relay bdk-check)"
   if [[ $EUID -eq 0 && -d "$RELAY_DIR/node_modules" ]]; then
-    esbuild_ok && pass "esbuild works" || bad "esbuild broken (fix: sudo grokbot-relay update, or npm rebuild esbuild protobufjs in $RELAY_DIR as grokbot)"
+    esbuild_ok && pass "esbuild works" || bad "esbuild NOT working: the relay cannot load TypeScript. Fix: sudo grokbot-relay update (reinstalls and rebuilds). Check: cd $RELAY_DIR && sudo -u grokbot npm rebuild esbuild"
   else note "esbuild check needs root"; fi
 
   systemctl is-enabled --quiet "$UNIT_NAME" 2>/dev/null && pass "service enabled at boot" || note "service not enabled at boot"

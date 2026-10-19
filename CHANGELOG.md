@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+- `relay/package.json` declares `allowScripts` (npm 11.16+): esbuild and protobufjs allowed, @cursor/bdk (optional skill installer) denied. Older npm ignores the field. Fixes "install scripts not yet covered by allowScripts" during `npm ci`/`rebuild`.
+- Quieter rebuild after `npm ci`; clearer `doctor` message when esbuild does not work.
+
 ## 0.5.0
 - TUI: `grokbot-relay` with no arguments (or `tui`) on a terminal opens a menu; whiptail > dialog > plain prompts. Setup wizard (`install --tui`, or offered on first run): Node check, port, install, bot names, login, start, doctor, group users. Menus are one-line registries in `bin/lib/tui.sh`.
 - After `npm ci` / bdk upgrade, run `npm rebuild esbuild protobufjs` (newer npm can skip their install scripts). `doctor` checks that esbuild works.
