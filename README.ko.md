@@ -28,7 +28,7 @@ npx bdk validate
 npx bdk dev                       # 선택: playground에서 "누구랑 얘기할 수 있어?" 시험
 
 export GROKBOT_RELAY_TOKEN="$(openssl rand -hex 32)"   # git에 넣지 마세요
-npx bdk serve --dir . --bearer-token "$GROKBOT_RELAY_TOKEN"
+npx bdk serve --dir . --port 47800 --bearer-token "$GROKBOT_RELAY_TOKEN"
 ```
 
 **로컬 확인 필요**
@@ -38,8 +38,8 @@ npx bdk serve --dir . --bearer-token "$GROKBOT_RELAY_TOKEN"
 ### Cursor
 
 ```bash
-npx bdk mcp install --url http://127.0.0.1:<PORT> --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot --print   # 미리보기
-npx bdk mcp install --url http://127.0.0.1:<PORT> --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot
+npx bdk mcp install --url http://127.0.0.1:47800 --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot --print   # 미리보기
+npx bdk mcp install --url http://127.0.0.1:47800 --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot
 ```
 
 토큰이 `~/.cursor/mcp.json`에 저장됩니다. 이 파일은 비밀번호처럼 다루세요.
@@ -47,7 +47,7 @@ npx bdk mcp install --url http://127.0.0.1:<PORT> --bearer-token "$GROKBOT_RELAY
 ### Claude Code
 
 ```bash
-export GROKBOT_RELAY_PORT=<PORT>
+export GROKBOT_RELAY_PORT=47800
 claude mcp add grokbot -- npx -y @cursor/bdk mcp --url "http://127.0.0.1:$GROKBOT_RELAY_PORT" --bearer-token "$GROKBOT_RELAY_TOKEN"
 ```
 
@@ -68,6 +68,8 @@ claude plugin install grokbot-relay@dev-toolkit
 | `/var/lib/grokbot` | `grokbot` 홈: Cursor 로그인 정보, serve 상태 |
 | `/etc/grokbot-relay/agents.json` | 봇 이름 허용 목록 (640 root:grokbot, git에 없음) |
 | `/etc/grokbot-relay/env` | `GROKBOT_RELAY_PORT`, `GROKBOT_RELAY_TOKEN` (640 root:grokbot) |
+
+- 기본 포트: **47800** (흔히 쓰지 않고, 알려진 서비스 포트가 아님). `install`이 `ss -ltn`으로 확인해서 이미 쓰이면 다음 빈 포트를 씁니다(마법사는 미리 채워 보여 줌). 이미 설정된 포트는 update/재설치 때 그대로 둡니다.
 
 관리자(root):
 

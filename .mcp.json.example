@@ -2,7 +2,15 @@
   "mcpServers": {
     "grokbot": {
       "command": "npx",
-      "args": ["-y", "@cursor/bdk", "mcp", "--url", "http://127.0.0.1:${GROKBOT_RELAY_PORT}", "--bearer-token", "${GROKBOT_RELAY_TOKEN}"]
+      "args": [
+        "-y",
+        "@cursor/bdk",
+        "mcp",
+        "--url",
+        "http://127.0.0.1:${GROKBOT_RELAY_PORT:-47800}",
+        "--bearer-token",
+        "${GROKBOT_RELAY_TOKEN}"
+      ]
     }
   }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+- Default port 47800 (was 3000, often taken). `install` checks with `ss -ltn` and uses the next free port with a message; the wizard pre-fills the free port and re-checks your choice. A configured port is kept on update/reinstall (`--port` is then ignored with a note).
+- `doctor` reports when the port is taken by another program and suggests a free one. README, `.mcp.json.example` and demo values updated.
+
 ## 0.7.1
 - Fresh `install --tui` / first TUI run: download and verify gum before the first screen (with a plain spinner), so the wizard opens in the gum UI. whiptail/plain only if the download fails.
 

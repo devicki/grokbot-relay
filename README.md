@@ -28,7 +28,7 @@ npx bdk validate
 npx bdk dev                       # optional: try "who can you talk to?" in the playground
 
 export GROKBOT_RELAY_TOKEN="$(openssl rand -hex 32)"   # keep it out of git
-npx bdk serve --dir . --bearer-token "$GROKBOT_RELAY_TOKEN"
+npx bdk serve --dir . --port 47800 --bearer-token "$GROKBOT_RELAY_TOKEN"
 ```
 
 **VERIFY LOCALLY**
@@ -38,8 +38,8 @@ npx bdk serve --dir . --bearer-token "$GROKBOT_RELAY_TOKEN"
 ### Cursor
 
 ```bash
-npx bdk mcp install --url http://127.0.0.1:<PORT> --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot --print   # preview
-npx bdk mcp install --url http://127.0.0.1:<PORT> --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot
+npx bdk mcp install --url http://127.0.0.1:47800 --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot --print   # preview
+npx bdk mcp install --url http://127.0.0.1:47800 --bearer-token "$GROKBOT_RELAY_TOKEN" --name grokbot
 ```
 
 This writes the token into `~/.cursor/mcp.json`. Treat that file as a credential.
@@ -47,7 +47,7 @@ This writes the token into `~/.cursor/mcp.json`. Treat that file as a credential
 ### Claude Code
 
 ```bash
-export GROKBOT_RELAY_PORT=<PORT>
+export GROKBOT_RELAY_PORT=47800
 claude mcp add grokbot -- npx -y @cursor/bdk mcp --url "http://127.0.0.1:$GROKBOT_RELAY_PORT" --bearer-token "$GROKBOT_RELAY_TOKEN"
 ```
 
@@ -68,6 +68,8 @@ One server, one service account `grokbot`, several users. An admin (root) instal
 | `/var/lib/grokbot` | `grokbot` home: Cursor login + serve state |
 | `/etc/grokbot-relay/agents.json` | allowlist of bot names (640 root:grokbot, not in git) |
 | `/etc/grokbot-relay/env` | `GROKBOT_RELAY_PORT`, `GROKBOT_RELAY_TOKEN` (640 root:grokbot) |
+
+- Default port: **47800** (uncommon, not a well-known service port). `install` checks it with `ss -ltn` and, if taken, uses the next free port (the wizard pre-fills it). An existing configured port is kept on update/reinstall.
 
 Admin (root):
 

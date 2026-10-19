@@ -57,7 +57,7 @@ g_style() { "$GUM" style "$@"; }
 ui_status_line() {
   local state port bots ver
   ver="$(read_version "$(script_root)")"
-  if [[ "${GRB_DEMO:-0}" == 1 ]]; then state=online; port=3000; bots=3
+  if [[ "${GRB_DEMO:-0}" == 1 ]]; then state=online; port=$DEFAULT_PORT; bots=3
   else
     if systemctl is-active --quiet "$UNIT_NAME" 2>/dev/null; then state=online; else state=offline; fi
     port="?"; [[ -r "$ENV_FILE" ]] && port="$(env_value GROKBOT_RELAY_PORT)"
@@ -375,13 +375,19 @@ w_node() {
   fi
 }
 w_install() {
-  local port=3000 cur
-  if [[ -r "$ENV_FILE" ]]; then cur="$(env_value GROKBOT_RELAY_PORT)"; port="${cur:-3000}"; fi
+  local port="$DEFAULT_PORT" cur
+  if [[ -r "$ENV_FILE" ]]; then cur="$(env_value GROKBOT_RELAY_PORT)"; port="${cur:-$DEFAULT_PORT}"; fi
   if [[ -f "$ENV_FILE" ]]; then
     ui_msg "Existing config found (port $port). It will be kept."
   else
-    port="$(ui_input "Port for the relay (listens on 127.0.0.1 only):" "$port")" || return 1
-    [[ "$port" =~ ^[0-9]+$ ]] || { ui_msg "Invalid port."; return 1; }
+    local free note=""; free="$(next_free_port "$port")"
+    [[ "$free" != "$port" ]] && note="\nPort $port is already in use; suggesting $free."
+    while true; do
+      port="$(ui_input "Port for the relay (listens on 127.0.0.1 only).$note" "$free")" || return 1
+      if ! [[ "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then note="\nInvalid port."; continue; fi
+      if port_in_use "$port"; then free="$(next_free_port "$port")"; note="\nPort $port is in use; next free: $free."; continue; fi
+      break
+    done
   fi
   ui_run "Installing (Node runtime, npm ci, service)" cmd_install --port "$port" --node "$W_NODE_MODE"
   local rc=$?; ui_detect; return "$rc"

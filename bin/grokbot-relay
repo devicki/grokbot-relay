@@ -15,6 +15,7 @@ RUNTIME_FILE="$ENV_DIR/runtime"   # NODE_MODE=private|system, NODE_BIN_DIR=... (
 NODE_DIR="$APP_DIR/node"
 NODE_MAJOR=24
 NODE_DIST="https://nodejs.org/dist/latest-v$NODE_MAJOR.x"
+DEFAULT_PORT=47800  # uncommon; not an IANA well-known/registered service port
 GUM_VERSION=2.0.2   # charmbracelet/gum, private TUI binary in $APP_DIR/bin/gum
 UNIT_NAME=grokbot-relay.service
 UNIT="/etc/systemd/system/$UNIT_NAME"
@@ -131,6 +132,20 @@ gum_fetch() { # best effort: private gum for the TUI; never fatal
 
 ensure_gum() { [[ -x "$APP_DIR/bin/gum" ]] || gum_fetch; }
 
+port_in_use() { # 0 if something listens on TCP port $1 (any address)
+  if command -v ss >/dev/null; then
+    [[ -n "$(ss -Htln "sport = :$1" 2>/dev/null)" ]]
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  fi
+}
+
+next_free_port() { # first free port starting at $1
+  local p="$1"
+  while port_in_use "$p" && (( p < 65535 )); do p=$((p+1)); done
+  echo "$p"
+}
+
 install_unit() { # $1 = source root
   local p="$RT_BIN:/usr/bin:/bin"
   sed "s|^Environment=PATH=.*|Environment=PATH=$p|" "$1/deploy/$UNIT_NAME" > "$UNIT"
@@ -207,7 +222,7 @@ restart_if_active() {
 # ---------------------------------------------------------------- install
 cmd_install() {
   need_root install
-  local port=3000 node_mode=private
+  local port="" node_mode=private
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --port) port="${2:?--port needs a number}"; shift 2 ;;
@@ -235,12 +250,17 @@ cmd_install() {
 
   install -d -o root -g "$SVC_USER" -m 750 "$ENV_DIR"
   if [[ ! -f "$ENV_FILE" ]]; then
+    local want="${port:-$DEFAULT_PORT}"
+    [[ "$want" =~ ^[0-9]+$ ]] && (( want > 0 && want < 65536 )) || die "Invalid port: $want"
+    port="$(next_free_port "$want")"
+    [[ "$port" != "$want" ]] && info "Port $want is already in use; using $port instead."
     local token
     token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
     ( umask 077; printf 'GROKBOT_RELAY_PORT=%s\nGROKBOT_RELAY_TOKEN=%s\n' "$port" "$token" > "$ENV_FILE" )
     unset token
     info "Created $ENV_FILE (token not shown)."
   else
+    [[ -n "$port" ]] && info "Ignoring --port $port: keeping the configured port $(env_value GROKBOT_RELAY_PORT) (edit $ENV_FILE to change it)."
     info "$ENV_FILE exists; kept as is."
   fi
   chown root:"$SVC_USER" "$ENV_FILE"; chmod 640 "$ENV_FILE"
@@ -507,7 +527,11 @@ cmd_doctor() {
     if command -v ss >/dev/null; then
       if ss -ltn "sport = :$port" | grep -q "127.0.0.1:$port"; then pass "listening on 127.0.0.1:$port"
       elif ss -ltn "sport = :$port" | grep -q ":$port"; then bad "port $port is listening but not only on 127.0.0.1"
+      elif port_in_use "$port"; then bad "port $port is used by something else"
       else bad "nothing listening on 127.0.0.1:$port"; fi
+      if ! systemctl is-active --quiet "$UNIT_NAME" 2>/dev/null && port_in_use "$port"; then
+        note "port $port is taken by another program; pick a free one (e.g. $(next_free_port "$port")) in $ENV_FILE, then restart"
+      fi
     else note "ss not found; skipped port check"; fi
   else note "cannot read $ENV_FILE without root/grokbot group"; fi
 
