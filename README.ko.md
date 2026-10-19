@@ -111,11 +111,15 @@ claude plugin install grokbot-relay@dev-toolkit
 
 ## TUI
 
-터미널에서 `sudo grokbot-relay`를 인자 없이 실행하면 메뉴가 열립니다. `whiptail`이나 `dialog`가 있으면 그 화면을 쓰고(`sudo apt install whiptail`), 없으면 번호 입력 메뉴로 동작합니다.
+터미널에서 `sudo grokbot-relay`를 인자 없이 실행하면 메뉴가 열립니다.
 
-- 처음 실행(아직 설치 전): **설치 마법사**를 권합니다. 환영 → Node.js 확인 → 포트 → 설치 → 봇 이름(내 봇 추가, 예시 `Research Bot` 삭제, 목록은 비울 수 없음) → Cursor 로그인(링크 표시) → 시작 → doctor → 그룹 사용자 추가.
-- 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇(목록/추가/삭제/편집) · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK 확인/업그레이드 · 설치 마법사 · Claude Code 연결 안내 · 정보.
-- `sudo grokbot-relay install --tui`는 마법사를 바로 엽니다. 모든 하위 명령은 스크립트에서 그대로 쓸 수 있고, 터미널이 아니면 인자 없이 실행 시 도움말만 출력합니다.
+![메인 메뉴](https://raw.githubusercontent.com/devicki/grokbot-relay/main/docs/tui-main.png)
+
+- [gum](https://github.com/charmbracelet/gum)으로 만들었습니다. `install`이 gum 공식 릴리스(x64/arm64)를 받아 `checksums.txt`로 검증하고 `/opt/grokbot-relay/bin/gum`에 둡니다. Node 런타임처럼 전역 PATH에는 넣지 않습니다. 받기에 실패하면 whiptail이나 번호 메뉴로 동작합니다.
+- 어두운 네온 스타일: 보라·청록 강조색, 둥근 테두리, 상태 헤더(`● online · 포트 · 봇 수 · 버전`). 오래 걸리는 단계는 스피너를 보여 주고, 마법사는 `[n/8]`과 진행 막대를 보여 줍니다.
+- 처음 실행(설치 전)에는 **설치 마법사**를 권합니다: 환영 → Node 런타임 → 설치 → 봇 이름(내 봇 추가, 예시 `Research Bot` 삭제, 빈 목록 불가) → Cursor 로그인(링크 표시) → 시작 → doctor → 그룹 사용자. `sudo grokbot-relay install --tui`로 바로 열 수 있습니다.
+- 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇 · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK/Node 런타임 · 설치 마법사 · Claude Code 연결 · 정보 · 삭제(`YES` 입력).
+- `grokbot-relay --plain` 또는 `NO_COLOR=1`은 색 없는 번호 메뉴를 씁니다. 모든 하위 명령은 대화창 없이 그대로 동작합니다.
 - 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
 
 ## CLI

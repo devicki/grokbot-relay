@@ -111,11 +111,15 @@ The relay brings its **own Node 24** in `/opt/grokbot-relay/node`: `install` dow
 
 ## TUI
 
-Run `sudo grokbot-relay` (no arguments) on a terminal to open a menu. It uses `whiptail` or `dialog` if installed (`sudo apt install whiptail`), otherwise numbered prompts.
+Run `sudo grokbot-relay` (no arguments) on a terminal to open the menu.
 
-- First run (not installed yet): offers the **setup wizard**: welcome, Node.js check, port, install, bot names (add yours, remove the example `Research Bot`; the list can't be empty), Cursor login (prints the sign-in link), start, doctor, add group users.
-- Main menu: Status · Start/stop/restart/logs · Bots (list/add/remove/edit) · Cursor login · Doctor · Update · Cursor BDK check/upgrade · Setup wizard · Connect Claude Code (info) · About.
-- `sudo grokbot-relay install --tui` forces the wizard. Every subcommand still works non-interactively for scripts; with no terminal, no-argument runs print help.
+![main menu](https://raw.githubusercontent.com/devicki/grokbot-relay/main/docs/tui-main.png)
+
+- Built on [gum](https://github.com/charmbracelet/gum). `install` downloads the official gum release (x64/arm64), verifies `checksums.txt`, and puts it in `/opt/grokbot-relay/bin/gum`, off the global PATH like the Node runtime. If that fails, the menu falls back to whiptail or plain prompts.
+- Dark neon look: violet/cyan accents, rounded borders, and a status header (`● online · port · bots · version`). Long steps show a spinner. Wizard steps show `[n/8]` with a progress bar.
+- First run (not installed yet) offers the **setup wizard**: welcome → Node runtime → install → bot names (add yours, remove the example `Research Bot`; the list can't be empty) → Cursor login (prints the sign-in link) → start → doctor → group users. `sudo grokbot-relay install --tui` opens it directly.
+- Main menu: Status · Start/stop/restart/logs · Bots · Cursor login · Doctor · Update · Cursor BDK/Node runtime · Setup wizard · Connect Claude Code · About · Uninstall (type `YES`).
+- `grokbot-relay --plain` or `NO_COLOR=1` gives plain prompts without colors. Every subcommand still works non-interactively.
 - Adding a menu item is one line in `bin/lib/tui.sh` (`"id|label|function"` in `MAIN_MENU`, `WIZARD_STEPS`, …).
 
 ## CLI

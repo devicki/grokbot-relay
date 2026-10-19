@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+- New TUI look built on charmbracelet/gum 2.0.2: dark neon palette (violet/cyan), rounded borders, relay wordmark, status header (online/offline, port, bot count, version), spinners for long steps, wizard progress `[n/8]` with a bar, English button labels.
+- `install`/`update` fetch the official gum release (x64/arm64), verify `checksums.txt`, and keep it in `/opt/grokbot-relay/bin/gum` (not on the global PATH). If that fails, whiptail/plain menus are used.
+- `--plain` flag and `NO_COLOR` fallback. Menu registry, non-interactive subcommands and the uninstall `YES` confirmation are unchanged.
+
 ## 0.6.0
 - Private Node runtime: `install` downloads the official Node 24 linux tarball (x64/arm64) from nodejs.org, verifies SHASUMS256, extracts to `/opt/grokbot-relay/node`. Never on the global PATH; the CLI and the systemd unit (`Environment=PATH=...`) use it. No Node needed beforehand (curl, tar, sha256sum only).
 - `install --node system` to use an existing system node 22+. Runtime recorded in `/etc/grokbot-relay/runtime`.
