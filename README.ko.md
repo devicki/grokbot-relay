@@ -123,6 +123,8 @@ claude plugin install grokbot-relay@dev-toolkit
 - 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇 · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK/Node 런타임 · 설치 마법사 · Claude Code 연결 · 정보 · 삭제(`YES` 입력).
 - `grokbot-relay --plain` 또는 `NO_COLOR=1`은 색 없는 번호 메뉴를 씁니다. 모든 하위 명령은 대화창 없이 그대로 동작합니다.
 - 위저드 키: **Esc** = 이전 단계 (1단계에서는 종료 확인) · **Ctrl+C** = 확인 후 종료 (다음 단계로 넘어가지 않음). plain 모드는 `b` 뒤로, `q` 종료. 다시 이어서 하려면 `sudo grokbot-relay install --tui`를 실행하세요.
+- 봇을 제거하거나 체크 해제해도 **이 relay의 허용 목록**에서만 빠집니다. Grok Bot 앱의 실제 봇은 삭제되지 않습니다(uninstall도 마찬가지).
+- 헤드리스 서버 / SSH: `login`은 로그인 URL을 출력하고 기다립니다. 아무 컴퓨터의 브라우저에서 열어 로그인하면 명령이 자동으로 끝납니다. "Opening your browser" 문구는 무시해도 됩니다. 브라우저를 쓸 수 없다면 Cursor 대시보드에서 발급한 키로 `bdk login --api-key <key>`를 사용하세요.
 - 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
 
 ## CLI

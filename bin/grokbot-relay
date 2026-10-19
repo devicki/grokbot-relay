@@ -302,6 +302,7 @@ NEXT
 cmd_login() {
   need_root login
   [[ -d "$RELAY_DIR" ]] || die "Not installed. Run: sudo grokbot-relay install"
+  info "$LOGIN_HINT"
   as_svc "cd '$RELAY_DIR' && ./node_modules/.bin/bdk login"
 }
 
@@ -484,6 +485,9 @@ agents_check_nonempty() {
   node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const n=(d.agents||[]).map(a=>typeof a==="string"?a:a&&a.name).filter(x=>x&&x.trim()&&x!=="*");if(!n.length){process.exit(1)}' "$AGENTS_FILE"
 }
 
+BOTS_NOTE="Unchecked or removed bots are only removed from this relay's allowlist — your bots in the Grok Bot app are not deleted."
+LOGIN_HINT="bdk login prints a sign-in URL and waits. No browser is needed on this server: copy the URL into a browser on any computer (works over SSH), sign in, and this command finishes on its own. The 'Opening your browser' line is harmless on a headless server. Alternative: an API key from the Cursor dashboard (bdk login --api-key)."
+
 cmd_agents() {
   local sub="${1:-list}"; shift || true
   case "$sub" in
@@ -498,6 +502,7 @@ cmd_agents() {
       need_root "agents $sub"
       if [[ -z "${1:-}" && "$sub" == add && -t 0 && -t 1 ]]; then load_tui; t_agents_pick; return; fi
       [[ -n "${1:-}" ]] || die "usage: grokbot-relay agents $sub \"<name>\"   (or: agents pick)"
+      [[ "$sub" == remove ]] && info "$BOTS_NOTE"
       local rc=0; agents_js "$sub" "$1" || rc=$?
       (( rc == 3 )) && return 0
       (( rc == 0 )) || exit "$rc"
@@ -615,7 +620,7 @@ cmd_uninstall() {
   else
     echo "Asked separately: $ENV_DIR (token, agents.json), $HOME_DIR (Cursor login), user/group $SVC_USER."
   fi
-  echo "Never touched: the source clone${src:+ ($src)}."
+  echo "Never touched: the source clone${src:+ ($src)}, and your bots in the Grok Bot app (only this relay's local allowlist goes away)."
   if (( ! yes )); then
     ask_yn "Proceed?" || { echo "Cancelled."; return 1; }
   fi

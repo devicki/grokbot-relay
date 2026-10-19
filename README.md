@@ -121,6 +121,8 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open the menu.
 - Dark neon look: violet/cyan accents, rounded borders, and a status header (`● online · port · bots · version`). Long steps show a spinner. Wizard steps show `[n/8]` with a progress bar.
 - First run (not installed yet) offers the **setup wizard**: welcome → Node runtime → install → Cursor login (prints the sign-in link) → choose bots (multi-select with your current names pre-checked, plus manual entry; the list can't be empty) → start → doctor → group users. `sudo grokbot-relay install --tui` opens it directly.
 - Wizard keys: **Esc** = back one step (step 1: asks to quit) · **Ctrl+C** = quit, after a confirmation; it never advances. Plain mode: `b` back, `q` quit. Re-run `sudo grokbot-relay install --tui` to resume.
+- Removing or unchecking a bot only takes it off **this relay's allowlist**. Your bots in the Grok Bot app are never deleted, and neither is anything else in your account (uninstall included).
+- Headless servers / SSH: `login` prints a sign-in URL and waits. Open it in a browser on any computer and the command finishes by itself. The "Opening your browser" line is harmless. Without a browser anywhere: `bdk login --api-key <key>` with a key from the Cursor dashboard.
 - Main menu: Status · Start/stop/restart/logs · Bots · Cursor login · Doctor · Update · Cursor BDK/Node runtime · Setup wizard · Connect Claude Code · About · Uninstall (type `YES`).
 - `grokbot-relay --plain` or `NO_COLOR=1` gives plain prompts without colors. Every subcommand still works non-interactively.
 - Adding a menu item is one line in `bin/lib/tui.sh` (`"id|label|function"` in `MAIN_MENU`, `WIZARD_STEPS`, …).

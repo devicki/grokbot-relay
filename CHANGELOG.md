@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.5
+- Bot picker (wizard, TUI, `agents pick`), `agents remove`, the remove-a-bot menu and uninstall now state that unchecking or removing a bot only changes this relay's allowlist. Your bots in the Grok Bot app are never deleted.
+- Login: a headless/SSH hint. Per the `@cursor/bdk` 0.2.25 source, `bdk login` always prints the sign-in URL to stderr before it tries `xdg-open` (failures are ignored), then polls until sign-in finishes. Open the URL on any computer. `bdk login --api-key` is the no-browser alternative.
+
 ## 0.7.4
 - Wizard: **Esc goes back** one step (on step 1 it asks to quit) instead of advancing. **Ctrl+C asks to quit** (SIGINT trapped) and never advances; quitting leaves partial state safe, and re-running `sudo grokbot-relay install --tui` resumes.
 - Footer hint `esc back · ctrl+c quit` on every step; the wizard is now a step-index loop.

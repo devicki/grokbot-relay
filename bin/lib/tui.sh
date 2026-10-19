@@ -353,7 +353,7 @@ t_logs()     { ui_run "logs (last 100)" cmd_logs; }
 t_logs_f()   { ui_shell "logs -f (Ctrl+C to stop)" cmd_logs -f; }
 t_login()    { ui_root_or_msg || return 1
   nav_clear 2>/dev/null || true
-  ui_msg "Cursor sign-in as the grokbot user.\n\nA sign-in link will be printed. Open it in any browser (another computer is fine), finish signing in, and the command returns."
+  ui_msg "Cursor sign-in as the grokbot user.\n\n$LOGIN_HINT\n\nSSH tip: select the printed URL in your terminal to copy it (it may wrap across lines; copy it whole)."
   nav_is_set && return 1
   ui_shell "bdk login" cmd_login; }
 t_update()   { ui_root_or_msg && ui_yesno "Pull the source clone, recopy, npm ci and restart?\nenv and agents.json are kept." && ui_run "update" cmd_update; }
@@ -365,7 +365,7 @@ t_connect()  { ui_msg "Regular users connect Claude Code like this:\n\n  1) Admi
 t_uninstall() {
   ui_root_or_msg || return 1
   local mode
-  mode="$(ui_menu "Uninstall grokbot-relay. The source clone is never touched." \
+  mode="$(ui_menu "Uninstall grokbot-relay. The source clone is never touched.\nYour bots in the Grok Bot app are not deleted; only this relay goes away." \
     "ask|Remove service and app; ask about config, login, user" \
     "keep|Remove service and app; keep config (token, agents.json)" \
     "purge|Remove EVERYTHING (config, Cursor login, grokbot user)")" || return 0
@@ -393,7 +393,7 @@ t_agents_remove() {
   local -a items=(); local n
   while IFS= read -r n; do [[ -n "$n" && "$n" != "("* ]] && items+=("$n|$n"); done < <(agents_js list 2>/dev/null)
   (( ${#items[@]} )) || { ui_msg "No agents listed."; return 0; }
-  n="$(ui_menu "Remove which bot? (the last one cannot be removed)" "${items[@]}")" || return 0
+  n="$(ui_menu "Remove which bot? (the last one cannot be removed)\n$BOTS_NOTE" "${items[@]}")" || return 0
   ui_run "agents remove" cmd_agents remove "$n"
 }
 t_agents_edit() { ui_root_or_msg && ui_shell "agents edit" cmd_agents edit; }
@@ -413,7 +413,7 @@ t_agents_pick() {
     local chosen=""
     if (( ${#cand[@]} )); then
       nav_clear
-      chosen="$(ui_multi "Select the bots this relay may contact (space toggles, enter confirms).${note:+\n$note}\nUncheck the example 'Research Bot'." "$pre" "${cand[@]}")" || return 0
+      chosen="$(ui_multi "Select the bots this relay may contact (space toggles, enter confirms).${note:+\n$note}\nUncheck the example 'Research Bot'.\n$BOTS_NOTE" "$pre" "${cand[@]}")" || return 0
     elif [[ -n "$note" ]]; then ui_msg "$note"; fi
     nav_is_set && return 1
     local extra; extra="$(ui_input "Add more bot names, comma-separated (exactly as in the Grok Bot app). Leave empty to skip:" "")" || extra=""
