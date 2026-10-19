@@ -331,7 +331,35 @@ cmd_logs() {
 }
 
 # ---------------------------------------------------------------- update
+# Quiet step runner: spinner (on a terminal) then ✓/✗; the captured log is shown on failure.
+# GRB_VERBOSE=1 (-v/--verbose) streams the full output instead.
+step() {
+  local label="$1"; shift
+  if [[ "${GRB_VERBOSE:-0}" == 1 ]]; then info "$label"; "$@"; return; fi
+  local log rc=0; log="$(mktemp)"
+  ( "$@" ) >"$log" 2>&1 &
+  local pid=$! i=0 fr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  if [[ -t 1 ]]; then
+    while kill -0 "$pid" 2>/dev/null; do printf '\r  %s %s' "${fr:i++%10:1}" "$label"; sleep 0.12; done
+    printf '\r\033[K'
+  fi
+  wait "$pid" || rc=$?
+  if (( rc == 0 )); then printf '  ✓ %s\n' "$label"
+  else
+    printf '  ✗ %s (exit %s)\n--- log ---\n' "$label" "$rc"; cat "$log"; echo "--- end log ---"
+  fi
+  rm -f "$log"; return "$rc"
+}
+# CHANGELOG lines between "## new" and "## old" (short summary).
+changelog_between() {
+  local file="$1" old="$2" new="$3"
+  [[ -f "$file" && "$old" != "$new" ]] || return 0
+  awk -v o="## $old" -v n="## $new" 'index($0,n)==1{p=1} index($0,o)==1{exit} p' "$file" | grep -E '^(## |- )' | cut -c1-110 | head -12
+}
+
+unit_reload() { install_unit "$1" && systemctl daemon-reload; }
 cmd_update() {
+  local a; for a in "$@"; do case "$a" in -v|--verbose) export GRB_VERBOSE=1 ;; *) die "update: unknown option $a (use -v)" ;; esac; done
   need_root update
   [[ -f "$SOURCE_FILE" ]] || die "No source recorded ($SOURCE_FILE). Re-run install from your clone."
   local src old new
@@ -340,17 +368,18 @@ cmd_update() {
   [[ -d "$src/.git" ]] || die "$src is not a git clone."
   old="$(read_version "$APP_DIR")"
   local owner; owner="$(stat -c %U "$src")"
-  info "git pull in $src (as $owner)"
-  sudo -u "$owner" git -C "$src" pull --ff-only
+  step "Fetching updates ($src)" sudo -u "$owner" git -C "$src" pull --ff-only || die "git pull failed; nothing changed."
   new="$(read_version "$src")"
-  copy_app "$src"
-  npm_ci
-  ensure_gum
-  install_unit "$src"
-  systemctl daemon-reload
-  info "Kept $ENV_FILE and $AGENTS_FILE."
-  restart_if_active
-  info "Version: $old -> $new"
+  if [[ "$old" == "$new" ]]; then echo "  · version $old (no new release; refreshing files)"; else echo "  · version $old → $new"; fi
+  step "Copying app" copy_app "$src" || die "Copy failed."
+  step "Installing dependencies (npm ci)" npm_ci || die "npm ci failed."
+  step "Checking gum" ensure_gum || true
+  step "Service unit" unit_reload "$src" || die "Service unit update failed."
+  step "Restarting (if running)" restart_if_active || die "Restart failed."
+  echo "  · kept $ENV_FILE and $AGENTS_FILE"
+  local cl; cl="$(changelog_between "$src/CHANGELOG.md" "$old" "$new")"
+  [[ -n "$cl" ]] && { echo; echo "What's new:"; printf '%s\n' "$cl" | sed 's/^/  /'; }
+  return 0
 }
 
 # ---------------------------------------------------------------- bdk
@@ -374,18 +403,16 @@ cmd_bdk_check() {
 
 cmd_bdk_upgrade() {
   need_root bdk-upgrade
-  local pin=0
-  [[ "${1:-}" == "--pin" ]] && pin=1
+  local pin=0 dev=0 a
+  for a in "$@"; do case "$a" in --pin) pin=1 ;; --dev) dev=1 ;; -v|--verbose) export GRB_VERBOSE=1; dev=1 ;; *) die "bdk-upgrade: unknown option $a (use --pin, --dev, -v)" ;; esac; done
   [[ -d "$RELAY_DIR" ]] || die "Not installed."
   local old new bak
   old="$(installed_bdk)"
   bak="$(mktemp -d)"
   cp "$RELAY_DIR/package.json" "$RELAY_DIR/package-lock.json" "$bak/" 2>/dev/null || true
-  info "Upgrading $NPM_PKG ($old -> latest)"
-  if ! as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund $NPM_PKG@latest"; then
-    die "npm install failed; nothing changed in the running service."
-  fi
-  npm_rebuild
+  step "Upgrading $NPM_PKG ($old → latest)" as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund --loglevel=error $NPM_PKG@latest" \
+    || die "npm install failed; nothing changed in the running service."
+  step "Rebuilding native deps" npm_rebuild || true
   new="$(installed_bdk)"
   if validate_relay; then
     info "bdk validate passed ($old -> $new)."
@@ -406,6 +433,7 @@ cmd_bdk_upgrade() {
     info "Wrote package.json/package-lock.json into $src/relay."
   fi
   rm -rf "$bak"
+  (( dev )) || return 0
   cat <<UP
 
 To share this bump upstream:
@@ -747,7 +775,8 @@ Setup (root)
                             (downloaded from nodejs.org, SHA256-checked, not on global PATH);
                             --tui runs the setup wizard
   login                     Cursor sign-in as the grokbot user (bdk login)
-  update                    git pull the source clone, recopy, npm ci, restart; keeps env/agents
+  update [-v]               git pull the source clone, recopy, npm ci, restart; keeps env/agents
+                            quiet step lines + "What's new"; -v shows full output
 Service (root, except status/logs)
   start | stop | restart    control the service
   status                    systemctl status
@@ -762,8 +791,11 @@ Agents
 BDK
   node-upgrade              refresh the private Node runtime to the latest 24.x (root)
   bdk-check                 compare installed @cursor/bdk with npm latest
-  bdk-upgrade [--pin]       upgrade @cursor/bdk, validate, restart or roll back (root);
+  bdk-upgrade [--pin] [--dev|-v]  upgrade @cursor/bdk, validate, restart or roll back (root);
+                            --dev/-v also prints how to share the bump upstream
                             --pin also writes package*.json into the source clone for a PR
+  NOTE: don't run 'bdk update' directly; use 'grokbot-relay bdk-upgrade'
+        (the relay uses its own bdk under /opt).
 Other
   uninstall [--purge|--keep-config] [-y]  remove service, /opt app, CLI link (root);
                             asks before config, login/state, and the grokbot user
@@ -787,7 +819,7 @@ main() {
     start|stop|restart|enable|disable) cmd_svc "$cmd" ;;
     status) cmd_status ;;
     logs) cmd_logs "$@" ;;
-    update) cmd_update ;;
+    update) cmd_update "$@" ;;
     bdk-check) cmd_bdk_check ;;
     bdk-upgrade) cmd_bdk_upgrade "$@" ;;
     agents) cmd_agents "$@" ;;

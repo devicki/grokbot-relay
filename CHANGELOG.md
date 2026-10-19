@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.8
+- `update`: the raw git and npm output is hidden. You get step lines (fetching, version X → Y, copy, deps, service unit, restart) with a spinner and ✓, then a short "What's new" from the CHANGELOG. A failed step prints its captured log. `-v`/`--verbose` shows the full output.
+- `bdk-upgrade`: npm runs quieter (`--loglevel=error`, step lines). The "share this bump upstream" git instructions only appear with `--dev` or `-v`/`--verbose`.
+- `help` and the README: don't run `bdk update` directly; use `grokbot-relay bdk-upgrade` (the relay uses its own bdk under `/opt`).
+
 ## 0.7.7
 - Wizard step 8 (Group users) and the new TUI menu item "Group users" offer a multi-select of regular local accounts (UID ≥ 1000, a real login shell, not nobody) with current `grokbot` members pre-checked. A manual field takes comma- or space-separated names, each validated with `id`. Unchecking a member removes them with `gpasswd -d`, after a confirmation. A summary follows, with a reminder to log out and back in.
 - New CLI: `grokbot-relay users list|pick|add NAME...|remove NAME...`.

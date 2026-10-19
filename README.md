@@ -93,6 +93,8 @@ sudo grokbot-relay bdk-check              # is a newer @cursor/bdk out?
 sudo grokbot-relay bdk-upgrade            # upgrade, validate, restart or roll back
 ```
 
+> Don't run `bdk update` directly; use `grokbot-relay bdk-upgrade` (the relay uses its own bdk under `/opt`).
+
 Each regular user (log out and back in after `usermod`):
 
 ```bash
@@ -139,10 +141,10 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open the menu.
 | `start`, `stop`, `restart` | yes | control the service |
 | `status`, `logs [-f]` | no | `systemctl status`, `journalctl` |
 | `enable`, `disable` | yes | start at boot or not |
-| `update` | yes | `git pull --ff-only` in the source clone, recopy, `npm ci`, restart; env and `agents.json` kept |
+| `update [-v]` | yes | `git pull --ff-only` in the source clone, recopy, `npm ci`, restart; env and `agents.json` kept; quiet step lines and a short "What's new"; `-v` shows full output |
 | `node-upgrade` | yes | refresh the private Node runtime to the latest 24.x |
 | `bdk-check` | no | installed vs npm latest `@cursor/bdk`, with links |
-| `bdk-upgrade [--pin]` | yes | `npm install @cursor/bdk@latest` in `/opt`, `bdk validate`, restart only if it passes, else roll back. `--pin` writes `relay/package*.json` into the source clone so you can open a PR |
+| `bdk-upgrade [--pin] [--dev] [-v]` | yes | `npm install @cursor/bdk@latest` in `/opt`, `bdk validate`, restart only if it passes, else roll back. `--pin` writes `relay/package*.json` into the source clone so you can open a PR. `--dev`/`-v` also prints how to share the bump upstream |
 | `agents list` | group | allowed names |
 | `agents pick` | yes | multi-select of the current names (pre-checked) plus manual names. The Grok Bot account list is **not** available: @cursor/bdk has no list route, so names you have not added yet must be typed. `agents add` with no name on a terminal opens the same picker |
 | `agents add NAME`, `agents remove NAME`, `agents edit` | yes | change `agents.json` and restart; an empty list is refused |

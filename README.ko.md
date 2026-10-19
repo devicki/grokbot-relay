@@ -93,6 +93,8 @@ sudo grokbot-relay bdk-check              # 새 @cursor/bdk가 나왔는지
 sudo grokbot-relay bdk-upgrade            # 올리고 validate, 통과하면 재시작, 실패하면 되돌림
 ```
 
+> `bdk update`를 직접 실행하지 마세요. `grokbot-relay bdk-upgrade`를 쓰세요(relay는 `/opt` 아래의 자체 bdk를 씁니다).
+
 일반 사용자 각자 (`usermod` 후 다시 로그인):
 
 ```bash
@@ -139,10 +141,10 @@ claude plugin install grokbot-relay@dev-toolkit
 | `start`, `stop`, `restart` | 필요 | 서비스 제어 |
 | `status`, `logs [-f]` | 불필요 | `systemctl status`, `journalctl` |
 | `enable`, `disable` | 필요 | 부팅 시 자동 시작 켜기·끄기 |
-| `update` | 필요 | 원본 clone에서 `git pull --ff-only`, 다시 복사, `npm ci`, 재시작. env와 `agents.json`은 유지 |
+| `update [-v]` | 필요 | 원본 clone에서 `git pull --ff-only`, 다시 복사, `npm ci`, 재시작. env와 `agents.json`은 유지; 단계별 짧은 진행 표시와 "What's new" 요약, `-v`는 전체 출력 |
 | `node-upgrade` | 필요 | 자체 Node 런타임을 최신 24.x로 교체 |
 | `bdk-check` | 불필요 | 설치된 `@cursor/bdk`와 npm 최신 버전 비교, 링크 표시 |
-| `bdk-upgrade [--pin]` | 필요 | `/opt`에서 `npm install @cursor/bdk@latest`, `bdk validate` 통과 시에만 재시작, 실패하면 되돌림. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함 |
+| `bdk-upgrade [--pin] [--dev] [-v]` | 필요 | `/opt`에서 `npm install @cursor/bdk@latest`, `bdk validate` 통과 시에만 재시작, 실패하면 되돌림. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함. `--dev`/`-v`는 업스트림 공유 방법도 출력 |
 | `agents list` | 그룹 | 허용된 이름 |
 | `agents pick` | 필요 | 현재 이름(미리 체크)의 다중 선택 + 직접 입력. Grok Bot 계정의 봇 목록은 **가져올 수 없습니다**: @cursor/bdk에 목록 조회 경로가 없어서, 아직 넣지 않은 이름은 직접 입력해야 합니다. 터미널에서 이름 없이 `agents add`를 실행하면 같은 선택 화면이 열립니다 |
 | `agents add NAME`, `agents remove NAME`, `agents edit` | 필요 | `agents.json` 수정 후 재시작. 빈 목록은 거부 |
