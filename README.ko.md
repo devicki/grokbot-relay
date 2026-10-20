@@ -1,6 +1,8 @@
 # grokbot-relay
 
-Claude Code, Cursor, 터미널에서 내 Grok Bot 에이전트에게 **로컬** Cursor BDK 중계(`cursor-grokbot-agents` 확장)로 질문하고 답을 받아옵니다. [English](README.md)
+[English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · [繁體中文](README.zh-TW.md)
+
+Claude Code, Cursor, 터미널에서 내 Grok Bot 에이전트에게 **로컬** Cursor BDK 중계(`cursor-grokbot-agents` 확장)로 질문하고 답을 받아옵니다.
 
 > 0.1.0: `@cursor/bdk` 0.2.25 문서 기준 뼈대입니다. **로컬 확인 필요** 표시는 아직 테스트하지 않았습니다.
 
@@ -122,12 +124,12 @@ claude plugin install grokbot-relay@dev-toolkit
 - [gum](https://github.com/charmbracelet/gum)으로 만들었습니다. `install`이 gum 공식 릴리스(x64/arm64)를 받아 `checksums.txt`로 검증하고 `/opt/grokbot-relay/bin/gum`에 둡니다. Node 런타임처럼 전역 PATH에는 넣지 않습니다. 받기에 실패하면 whiptail이나 번호 메뉴로 동작합니다.
 - 어두운 네온 스타일: 보라·청록 강조색, 둥근 테두리, 상태 헤더(`● online · 포트 · 봇 수 · 버전`). 오래 걸리는 단계는 스피너를 보여 주고, 마법사는 `[n/8]`과 진행 막대를 보여 줍니다.
 - 처음 실행(설치 전)에는 **설치 마법사**를 권합니다: 환영 → Node 런타임 → 설치 → Cursor 로그인(링크 표시) → 봇 선택(현재 이름이 미리 체크된 다중 선택 + 직접 입력, 빈 목록 불가) → 시작 → doctor → 그룹 사용자. `sudo grokbot-relay install --tui`로 바로 열 수 있습니다.
-- 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇 · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK/Node 런타임 · 설치 마법사 · Claude Code 연결 · 정보 · 삭제(`YES` 입력).
-- `grokbot-relay --plain` 또는 `NO_COLOR=1`은 색 없는 번호 메뉴를 씁니다. 모든 하위 명령은 대화창 없이 그대로 동작합니다.
 - 위저드 키: **Esc** = 이전 단계 (1단계에서는 종료 확인) · **Ctrl+C** = 확인 후 종료 (다음 단계로 넘어가지 않음). plain 모드는 `b` 뒤로, `q` 종료. 다시 이어서 하려면 `sudo grokbot-relay install --tui`를 실행하세요.
-- 봇을 제거하거나 체크 해제해도 **이 relay의 허용 목록**에서만 빠집니다. Grok Bot 앱의 실제 봇은 삭제되지 않습니다(uninstall도 마찬가지).
+- 봇을 제거하거나 체크 해제해도 **이 relay의 허용 목록**에서만 빠집니다. Grok Bot 앱의 실제 봇은 삭제되지 않으며, 계정의 다른 어떤 것도 삭제되지 않습니다(uninstall도 마찬가지).
 - 헤드리스 서버 / SSH: `login`은 로그인 URL을 출력하고 기다립니다. 아무 컴퓨터의 브라우저에서 열어 로그인하면 명령이 자동으로 끝납니다. "Opening your browser" 문구는 무시해도 됩니다. 브라우저를 쓸 수 없다면 Cursor 대시보드에서 발급한 키로 `bdk login --api-key <key>`를 사용하세요.
 - 그룹 사용자(위저드 8단계, 메뉴 "Group users", 또는 `sudo grokbot-relay users pick`): 일반 계정을 여러 개 선택할 수 있고(기존 멤버는 미리 체크됨), 쉼표나 공백으로 구분해 이름을 추가로 입력할 수 있습니다. 기존 멤버를 체크 해제하면 확인 후 그룹에서 제거됩니다. 비대화형으로는 `users list | add NAME... | remove NAME...`을 쓰세요. 변경 후 해당 사용자는 다시 로그인해야 적용됩니다. 마지막 안내 화면에는 관리자가 한 일과 각 사용자가 실행할 명령이 정리되어 나옵니다.
+- 메인 메뉴: 상태 · 시작/중지/재시작/로그 · 봇 · Cursor 로그인 · Doctor · 업데이트 · Cursor BDK/Node 런타임 · 설치 마법사 · Claude Code 연결 · 정보 · 삭제(`YES` 입력).
+- `grokbot-relay --plain` 또는 `NO_COLOR=1`은 색 없는 번호 메뉴를 씁니다. 모든 하위 명령은 대화창 없이 그대로 동작합니다.
 - 메뉴 항목 추가는 `bin/lib/tui.sh`에 한 줄(`MAIN_MENU`, `WIZARD_STEPS` 등에 `"id|label|function"`)이면 됩니다.
 
 ## CLI
@@ -156,9 +158,9 @@ claude plugin install grokbot-relay@dev-toolkit
 
 참고:
 - `connect-claude`는 시작할 때마다 `/etc/grokbot-relay/env`를 읽는 `bash -c` 명령을 등록합니다. 그래서 토큰이 Claude Code 설정(`~/.claude.json`)에 **저장되지 않습니다**. 토큰을 직접 넣어 `claude mcp add`를 하면 거기에 평문으로 저장됩니다.
-- 토큰은 프로세스 인자(`--bearer-token`)로 넘어가서 같은 서버의 다른 사용자가 `ps`로 볼 수 있습니다. 공용 서버라면 `/proc`를 `hidepid=2`로 마운트하세요.
+- 토큰은 프로세스 인자(`--bearer-token`)로 넘어가서 같은 서버의 다른 사용자가 `ps`로 볼 수 있습니다. 공용 서버라면 `/proc`를 `hidepid=2`로 마운트하거나, 그룹 멤버와 관리자가 볼 수 있다는 점을 감수하세요.
 - `grokbot` 그룹 사용자는 토큰 하나를 같이 써서 BDK 호출자 신원(연락 목록, 읽은 위치)과 Grok Bot 계정을 공유합니다.
-- 토큰 교체: env 파일 수정 후 `sudo grokbot-relay restart`. 사용자는 다시 할 일이 없습니다.
+- 토큰 교체: env 파일 수정 후 `sudo grokbot-relay restart`. 사용자는 다시 할 일이 없습니다(시작할 때마다 읽음).
 
 **서버에서 확인 필요**
 - 유닛의 `bdk serve` 옵션: `--host 127.0.0.1 --port`, `--mode single`(MCP 경로 `/v1/mcp`), `--bearer-token` (0.2.25 CLI 문서 기준, 아직 실행 안 함)
