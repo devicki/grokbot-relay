@@ -819,6 +819,7 @@ BDK
                             --pin also writes package*.json into the source clone for a PR
   NOTE: don't run 'bdk update' directly; use 'grokbot-relay bdk-upgrade'
         (the relay uses its own bdk under /opt).
+        Do not upgrade past @cursor/bdk 0.2.28: 0.2.29+ removes cursor-grokbot-agents.
 Other
   uninstall [--purge|--keep-config] [-y]  remove service, /opt app, CLI link (root);
                             asks before config, login/state, and the grokbot user

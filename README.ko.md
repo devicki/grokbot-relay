@@ -97,6 +97,8 @@ sudo grokbot-relay bdk-upgrade            # 올리고 validate, 통과하면 재
 
 > `bdk update`를 직접 실행하지 마세요. `grokbot-relay bdk-upgrade`를 쓰세요(relay는 `/opt` 아래의 자체 bdk를 씁니다).
 
+> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `0.2.29` 이상은 `cursor-grokbot-agents` 확장을 빼므로 `0.2.28`을 넘어 올리지 마세요.
+
 일반 사용자 각자 (`usermod` 후 다시 로그인):
 
 ```bash
@@ -176,6 +178,10 @@ sudo grokbot-relay uninstall --purge -y     # 전부 삭제, 묻지 않음
 ```
 
 서비스 유닛, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-relay`, `/etc/grokbot-relay/source`는 항상 지웁니다. 원본 clone은 건드리지 않습니다. TUI 메뉴(삭제, `YES` 입력으로 확인)에서도 할 수 있습니다.
+
+## 릴리스
+
+`VERSION`이 릴레이 버전입니다. 릴리스는 같은 번호의 git 태그 `vX.Y.Z`와, 노트가 `CHANGELOG.md`의 해당 절인 GitHub Release입니다. [RELEASING.md](RELEASING.md)를 보세요.
 
 ## 안전
 
