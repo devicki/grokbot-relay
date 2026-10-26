@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # 올리고 validate, 통과하면 재
 
 > `bdk update`를 직접 실행하지 마세요. `grokbot-relay bdk-upgrade`를 쓰세요(relay는 `/opt` 아래의 자체 bdk를 씁니다).
 
-> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `0.2.29` 이상은 `cursor-grokbot-agents` 확장을 빼므로 `0.2.28`을 넘어 올리지 마세요.
+> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `0.2.29` 이상은 `cursor-grokbot-agents` 확장을 빼므로 `0.2.28`을 넘어 올리지 마세요. `relay-v1/`의 v1 트리는 별도 라인이며 이 고정을 바꾸지 않습니다.
 
 일반 사용자 각자 (`usermod` 후 다시 로그인):
 
@@ -179,9 +179,51 @@ sudo grokbot-relay uninstall --purge -y     # 전부 삭제, 묻지 않음
 
 서비스 유닛, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-relay`, `/etc/grokbot-relay/source`는 항상 지웁니다. 원본 clone은 건드리지 않습니다. TUI 메뉴(삭제, `YES` 입력으로 확인)에서도 할 수 있습니다.
 
+## v0과 v1
+
+위의 설치는 **v0** 라인입니다 (`relay/`, `@cursor/bdk@0.2.28`, `cursor-grokbot-agents`). 바뀌지 않았습니다. **v1**은 Agent SDK 0.3용 두 번째 트리입니다. `grokbot-relay install`은 이것을 복사하지 않으며, systemd 유닛도 그대로입니다.
+
+| | v0 | v1 |
+| --- | --- | --- |
+| 디렉터리 | `relay/` | `relay-v1/` |
+| 버전 | 루트 `VERSION` (`0.8.x`), 태그 `v0.8.x` | `relay-v1/VERSION` (제안 `1.0.0`, 아직 태그 없음) |
+| 패키지 | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.3.0` (`bdk` 바이너리는 같은 파일) |
+| Grok Bot 접근 | `cursor-grokbot-agents` | 이 저장소의 `/v0/grokbot` HTTP 클라이언트 |
+| 지금 | `sudo grokbot-relay install` | 이 트리를 체크아웃한 시험만 |
+
+v1은 `cursor-grokbot-agents`를 import하지 않습니다. 도구는 `grokbot__list`, `grokbot__ask`, `grokbot__check`입니다. `grokbot__interrupt`는 없습니다. `list`는 허용 목록과 이 호출자가 이미 물어본 연락처만 돌려줍니다. 계정 전체 봇 목록이 아닙니다. 빈 허용 목록은 예외를 던지며, 어떤 이름이든 허용한다는 뜻이 아닙니다. 모든 `POST …/messages` 본문 앞에 `[relay:claude-code]`가 붙습니다.
+
+v1에 가려고 `bdk-upgrade`를 쓰지 마세요. v0는 `0.2.28`에 남습니다. 더 새 `@cursor/bdk`를 거부하는 상한은 다음 변경입니다. 어느 라인도 npm `latest`를 따라가면 안 됩니다. 나중 설치는 명시적 태그를 체크아웃합니다. `relay/`는 `v0.8.x`, `relay-v1/`은 태그가 생긴 뒤 `v1.0.0`입니다.
+
+### 나중 서버 시험 (v1)
+
+이미 `grokbot` 사용자의 Cursor 로그인이 있는 서버에서 하세요. API 키를 명령줄에 넣지 마세요. `/var/lib/grokbot/state`는 실행 중인 v0 서비스이니 쓰지 마세요. `ask`에 새 봇 이름을 주면 빈 봇이 생깁니다. Grok Bot 앱에 이미 있는 이름을 쓰세요. 두 곳의 `YOUR_EXISTING_BOT`을 그 이름으로 바꾸세요.
+
+`npm test`와 `validate`는 API를 호출하지 않습니다. `whoami`는 로컬 로그인만 읽습니다. 그 계정이 봇 계정이 아니면 멈추세요. `grokbot__ask`는 실제 메시지를 보냅니다.
+
+```bash
+cd relay-v1
+# Node 22+. 이 서버에서 `node`가 더 오래됐으면 사설 런타임은 /opt/grokbot-relay/node/bin 입니다.
+export PATH="/opt/grokbot-relay/node/bin:$PATH"
+npm ci
+npm test
+./node_modules/.bin/agent-sdk validate --dir . --json
+
+# grokbot 사용자는 nologin입니다. -H가 홈을 고르고, Cursor 로그인은 거기에 있습니다.
+sudo -u grokbot -H ./node_modules/.bin/agent-sdk whoami --json
+
+sudo -u grokbot -H env GROKBOT_RELAY_AGENTS='YOUR_EXISTING_BOT' \
+  ./node_modules/.bin/agent-sdk tool call grokbot__ask --dir . \
+  --state-root /tmp/grokbot-relay-v1-trial \
+  --input '{"agent":"YOUR_EXISTING_BOT","message":"v1 trial ping","wait_seconds":60}' \
+  --json
+```
+
+허용 목록은 그 프로세스가 시작될 때 읽힙니다. 빈 목록은 호출을 거부하며 모든 봇을 뜻하지 않습니다. `status: "running"`으로 돌아온 답은 `grokbot__check`로 이어 받습니다. interrupt 명령은 없습니다.
+
 ## 릴리스
 
-`VERSION`이 릴레이 버전입니다. 릴리스는 같은 번호의 git 태그 `vX.Y.Z`와, 노트가 `CHANGELOG.md`의 해당 절인 GitHub Release입니다. [RELEASING.md](RELEASING.md)를 보세요.
+루트 `VERSION`은 v0 라인(`0.8.x`)입니다. `relay-v1/VERSION`은 v1 라인입니다(제안 `1.0.0`, 이 변경에서 태그하지 않음). `./bin/release`는 루트 파일만 배포합니다. 그 파일의 릴리스는 git 태그 `vX.Y.Z`와, 노트가 `CHANGELOG.md`의 해당 절인 GitHub Release입니다. [RELEASING.md](RELEASING.md)를 보세요.
 
 ## 안전
 

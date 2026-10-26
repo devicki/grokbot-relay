@@ -66,3 +66,21 @@ gh release create v0.8.1 --target 642f9ad --title "grokbot-relay 0.8.1" --notes-
 ```
 
 Repeat with the table. Skip any tag that already exists. Never pass `--force` to `git tag` or `git push`.
+
+## v1 line (not released by this file's script)
+
+Root `VERSION` is the v0 line. `./bin/release` reads only that file and the matching `## X.Y.Z` section of `CHANGELOG.md`. Do not put `1.0.0` in the root file to publish v1: that would make `./bin/release` tag the whole repo as `v1.0.0` and would stop naming the v0 line.
+
+v1's number is `relay-v1/VERSION`. This change sets it to `1.0.0` as the proposed first release and does not create the tag. `## Unreleased` in `CHANGELOG.md` is the note. `./bin/release` does not see it, because the root file is still `0.8.2`.
+
+After a server trial of `relay-v1/` (`whoami`, then an allowlisted `grokbot__ask` against a bot that already exists) succeeds, cut the tag by hand from the commit whose `relay-v1/VERSION` is `1.0.0`:
+
+```bash
+git tag -a v1.0.0 -m "grokbot-relay 1.0.0"
+git push origin refs/tags/v1.0.0
+gh release create v1.0.0 --title "grokbot-relay 1.0.0" --notes-file notes-1.0.0.md
+```
+
+Do that on `main` after the v1 commit is merged. Do not tag the pull-request branch. Do not move `v0.8.2` or any older tag. Never pass `--force`.
+
+Installers check out an explicit tag. `v0.8.x` is the `relay/` tree on `@cursor/bdk@0.2.28`. `v1.0.0` will be the `relay-v1/` tree on `@grok/agent-sdk@0.3.x`. Neither line tracks npm `latest`. `bin/grokbot-relay` keeps installing `relay/` until a later change teaches it the second directory.

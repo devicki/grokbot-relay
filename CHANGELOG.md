@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+v1 sits beside v0 and is not tagged. Root `VERSION` stays `0.8.2`. `./bin/release` still publishes only that root file, so this change does not cut `v0.8.3` or `v1.0.0`.
+
+### v1 line (`relay-v1/`, proposed `1.0.0`)
+
+- New tree `relay-v1/` on `@grok/agent-sdk@0.3.0`. It does not import `cursor-grokbot-agents`. It calls `POST /v0/grokbot/sessions`, `POST …/messages`, and `GET …/entries` itself. `grokbot__list` is the allowlist plus this caller's contacts (there is still no account-wide list). `grokbot__ask` get-or-creates a session, sends, and polls entries. `grokbot__check` resumes a running turn. `grokbot__interrupt` is not mounted. An empty allowlist throws and is never "any name". Every message body is prefixed with `[relay:claude-code]`.
+- Versioning: v0 remains root `VERSION` `0.8.x` and tag `v0.8.x`, installed from `relay/`. v1's number lives in `relay-v1/VERSION`. `1.0.0` there is the proposed first tag `v1.0.0`, to be cut only after a server trial of `whoami` plus an allowlisted `ask`. Install checks out an explicit tag. It does not track npm `latest`. `bin/grokbot-relay` and the systemd unit still install v0. See RELEASING.md.
+
 ## 0.8.2
 - relay: pin `@cursor/bdk` to exactly `0.2.28` in `package.json`, with `package-lock.json` refreshed. `0.2.28` still ships `cursor-grokbot-agents` (`ask`, `check`, `interrupt`, `list`). `0.2.29` and later remove that extension; stay on `0.2.28`. `allowScripts` is unchanged. This relay does not use the 0.2.28 removals (semantic search, and the unpublished `CATCH_DELIVERY_ID_HEADER`, `attachRelayMcp`, `CursorBackendClient`, and `postRelaySlackMessage` exports).
 - Releases: `VERSION` `X.Y.Z` is published as the annotated tag `vX.Y.Z` and a GitHub Release whose notes are that CHANGELOG section. `./bin/release` is a dry run; `./bin/release --apply` creates the tag and the Release, and it refuses to move an existing tag. See RELEASING.md. Run it on `main` after merge.
