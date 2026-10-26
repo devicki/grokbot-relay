@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # upgrade, validate, restart or roll b
 
 > Don't run `bdk update` directly; use `grokbot-relay bdk-upgrade` (the relay uses its own bdk under `/opt`).
 
-> This release pins `@cursor/bdk` to exactly `0.2.28`. `0.2.29` and later remove the `cursor-grokbot-agents` extension, so do not upgrade past `0.2.28`.
+> This release pins `@cursor/bdk` to exactly `0.2.28`. `0.2.29` and later remove the `cursor-grokbot-agents` extension, so do not upgrade past `0.2.28`. The v1 tree in `relay-v1/` is a separate line and does not move this pin.
 
 Each regular user (log out and back in after `usermod`):
 
@@ -179,9 +179,51 @@ sudo grokbot-relay uninstall --purge -y     # remove everything, no prompts
 
 Always removes the service unit, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-relay` and `/etc/grokbot-relay/source`. Never touches your source clone. Also in the TUI (Uninstall, type `YES` to confirm).
 
+## v0 and v1
+
+The install above is the **v0** line (`relay/`, `@cursor/bdk@0.2.28`, `cursor-grokbot-agents`). It is unchanged. **v1** is a second tree for Agent SDK 0.3. `grokbot-relay install` does not copy it, and the systemd unit is unchanged.
+
+| | v0 | v1 |
+| --- | --- | --- |
+| Directory | `relay/` | `relay-v1/` |
+| Version | root `VERSION` (`0.8.x`), tag `v0.8.x` | `relay-v1/VERSION` (proposed `1.0.0`, not tagged yet) |
+| Package | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.3.0` (the `bdk` binary is the same file) |
+| Grok Bot access | `cursor-grokbot-agents` | this repo's HTTP client for `/v0/grokbot` |
+| Today | `sudo grokbot-relay install` | trial only, from a checkout of this tree |
+
+v1 does not import `cursor-grokbot-agents`. Tools are `grokbot__list`, `grokbot__ask`, and `grokbot__check`. `grokbot__interrupt` is not mounted. `list` returns the allowlist plus contacts this caller has already asked. It is not an account-wide bot list. An empty allowlist throws and is never treated as any name. Every `POST …/messages` body is prefixed with `[relay:claude-code]`.
+
+Do not use `bdk-upgrade` to reach v1. v0 stays on `0.2.28`. A ceiling that refuses newer `@cursor/bdk` is a later change. Neither line should track npm `latest`. A later install should check out an explicit tag: `v0.8.x` for `relay/`, and `v1.0.0` for `relay-v1/` once that tag exists.
+
+### Later server trial (v1)
+
+Do this on the server that already has the `grokbot` user's Cursor login. Do not put an API key on the command line. Do not use `/var/lib/grokbot/state` (that is the running v0 service). A new bot name on `ask` creates an empty bot. Use a name that already exists in the Grok Bot app. Replace `YOUR_EXISTING_BOT` in both places with that name.
+
+`npm test` and `validate` do not call the API. `whoami` only reads the local login. Stop if that account is not the bot account. `grokbot__ask` sends a real message.
+
+```bash
+cd relay-v1
+# Node 22+. On this server the private runtime is /opt/grokbot-relay/node/bin if `node` is older.
+export PATH="/opt/grokbot-relay/node/bin:$PATH"
+npm ci
+npm test
+./node_modules/.bin/agent-sdk validate --dir . --json
+
+# The grokbot user is nologin. -H selects its home, where the Cursor login lives.
+sudo -u grokbot -H ./node_modules/.bin/agent-sdk whoami --json
+
+sudo -u grokbot -H env GROKBOT_RELAY_AGENTS='YOUR_EXISTING_BOT' \
+  ./node_modules/.bin/agent-sdk tool call grokbot__ask --dir . \
+  --state-root /tmp/grokbot-relay-v1-trial \
+  --input '{"agent":"YOUR_EXISTING_BOT","message":"v1 trial ping","wait_seconds":60}' \
+  --json
+```
+
+The allowlist is read when that process starts. An empty list refuses the call and does not mean every bot. `grokbot__check` continues a reply that comes back `status: "running"`. There is no interrupt command.
+
 ## Releases
 
-`VERSION` is the relay version. A release is the git tag `vX.Y.Z` (the same number) and a GitHub Release whose notes are that section of `CHANGELOG.md`. See [RELEASING.md](RELEASING.md).
+Root `VERSION` is the v0 line (`0.8.x`). `relay-v1/VERSION` is the v1 line (proposed `1.0.0`, not tagged by this change). `./bin/release` publishes the root file only. A release of that file is the git tag `vX.Y.Z` and a GitHub Release whose notes are that section of `CHANGELOG.md`. See [RELEASING.md](RELEASING.md).
 
 ## Safety
 

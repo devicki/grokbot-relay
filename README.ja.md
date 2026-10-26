@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # 更新して validate、通れば再
 
 > `bdk update` を直接実行しないでください。`grokbot-relay bdk-upgrade` を使います（リレーは `/opt` 配下の独自の bdk を使います）。
 
-> このリリースは `@cursor/bdk` をちょうど `0.2.28` に固定します。`0.2.29` 以降は `cursor-grokbot-agents` 拡張を外すので、`0.2.28` より先へ上げないでください。
+> このリリースは `@cursor/bdk` をちょうど `0.2.28` に固定します。`0.2.29` 以降は `cursor-grokbot-agents` 拡張を外すので、`0.2.28` より先へ上げないでください。`relay-v1/` の v1 ツリーは別ラインで、この固定は動きません。
 
 各一般ユーザー（`usermod` のあと一度ログアウトして再ログイン）：
 
@@ -179,9 +179,51 @@ sudo grokbot-relay uninstall --purge -y     # すべて削除、確認なし
 
 サービスユニット、`/opt/grokbot-relay`、`/usr/local/bin/grokbot-relay`、`/etc/grokbot-relay/source` は常に削除します。ソース clone には触れません。TUI からも可能です（Uninstall、確認に `YES` と入力）。
 
+## v0 と v1
+
+上のインストールは **v0** ラインです（`relay/`、`@cursor/bdk@0.2.28`、`cursor-grokbot-agents`）。変更していません。**v1** は Agent SDK 0.3 向けの二つ目のツリーです。`grokbot-relay install` はこれをコピーせず、systemd ユニットもそのままです。
+
+| | v0 | v1 |
+| --- | --- | --- |
+| ディレクトリ | `relay/` | `relay-v1/` |
+| バージョン | ルートの `VERSION`（`0.8.x`）、タグ `v0.8.x` | `relay-v1/VERSION`（提案 `1.0.0`、まだタグなし） |
+| パッケージ | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.3.0`（`bdk` バイナリは同じファイル） |
+| Grok Bot へのアクセス | `cursor-grokbot-agents` | このリポジトリの `/v0/grokbot` HTTP クライアント |
+| いま | `sudo grokbot-relay install` | このツリーをチェックアウトした試行のみ |
+
+v1 は `cursor-grokbot-agents` を import しません。ツールは `grokbot__list`、`grokbot__ask`、`grokbot__check` です。`grokbot__interrupt` はありません。`list` が返すのは許可リストと、この呼び出し元がすでに尋ねた相手です。アカウント全体のボット一覧ではありません。空の許可リストは例外になり、任意の名前を許すという意味にはなりません。すべての `POST …/messages` 本文の先頭に `[relay:claude-code]` が付きます。
+
+v1 に進むために `bdk-upgrade` を使わないでください。v0 は `0.2.28` のままです。より新しい `@cursor/bdk` を拒む上限は次の変更です。どちらのラインも npm `latest` を追いません。後のインストールは明示的なタグをチェックアウトします。`relay/` は `v0.8.x`、`relay-v1/` はタグができてから `v1.0.0` です。
+
+### 後のサーバー試行（v1）
+
+すでに `grokbot` ユーザーの Cursor ログインがあるサーバーで行います。API キーをコマンドラインに載せないでください。`/var/lib/grokbot/state` は動いている v0 サービスなので使わないでください。`ask` に新しいボット名を渡すと空のボットが作られます。Grok Bot アプリにすでにある名前を使います。二箇所の `YOUR_EXISTING_BOT` をその名前に置き換えてください。
+
+`npm test` と `validate` は API を呼びません。`whoami` はローカルのログインだけを読みます。そのアカウントがボットのアカウントでなければ止めてください。`grokbot__ask` は実際のメッセージを送ります。
+
+```bash
+cd relay-v1
+# Node 22+。このサーバーで `node` がそれより古いときは、専用ランタイムが /opt/grokbot-relay/node/bin にあります。
+export PATH="/opt/grokbot-relay/node/bin:$PATH"
+npm ci
+npm test
+./node_modules/.bin/agent-sdk validate --dir . --json
+
+# grokbot ユーザーは nologin です。-H がそのホームを選び、Cursor のログインはそこにあります。
+sudo -u grokbot -H ./node_modules/.bin/agent-sdk whoami --json
+
+sudo -u grokbot -H env GROKBOT_RELAY_AGENTS='YOUR_EXISTING_BOT' \
+  ./node_modules/.bin/agent-sdk tool call grokbot__ask --dir . \
+  --state-root /tmp/grokbot-relay-v1-trial \
+  --input '{"agent":"YOUR_EXISTING_BOT","message":"v1 trial ping","wait_seconds":60}' \
+  --json
+```
+
+許可リストはそのプロセスの起動時に読まれます。空のリストは呼び出しを拒否し、すべてのボットを意味しません。`status: "running"` で戻った返信は `grokbot__check` で続けます。interrupt コマンドはありません。
+
 ## リリース
 
-`VERSION` がリレーのバージョンです。リリースは同じ番号の git タグ `vX.Y.Z` と、ノートが `CHANGELOG.md` のその節である GitHub Release です。[RELEASING.md](RELEASING.md) を見てください。
+ルートの `VERSION` は v0 ライン（`0.8.x`）です。`relay-v1/VERSION` は v1 ラインです（提案 `1.0.0`、この変更ではタグしません）。`./bin/release` が公開するのはルートのファイルだけです。そのファイルのリリースは git タグ `vX.Y.Z` と、ノートが `CHANGELOG.md` のその節である GitHub Release です。[RELEASING.md](RELEASING.md) を見てください。
 
 ## 安全性
 

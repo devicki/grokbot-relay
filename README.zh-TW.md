@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # 升級、validate，通過則重新�
 
 > 不要直接執行 `bdk update`；請使用 `grokbot-relay bdk-upgrade`（中繼使用 `/opt` 底下自己的 bdk）。
 
-> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充，請不要升過 `0.2.28`。
+> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充，請不要升過 `0.2.28`。`relay-v1/` 的 v1 樹是另一條線，不會改動這個釘選。
 
 每位一般使用者（`usermod` 之後請登出再登入）：
 
@@ -179,9 +179,51 @@ sudo grokbot-relay uninstall --purge -y     # 全部移除，不詢問
 
 一律移除服務 unit、`/opt/grokbot-relay`、`/usr/local/bin/grokbot-relay` 與 `/etc/grokbot-relay/source`。絕不動你的來源 clone。也可在 TUI 中操作（Uninstall，輸入 `YES` 確認）。
 
+## v0 與 v1
+
+上面的安裝是 **v0** 線（`relay/`、`@cursor/bdk@0.2.28`、`cursor-grokbot-agents`）。沒有改動。**v1** 是給 Agent SDK 0.3 的第二棵樹。`grokbot-relay install` 不會複製它，systemd unit 也不變。
+
+| | v0 | v1 |
+| --- | --- | --- |
+| 目錄 | `relay/` | `relay-v1/` |
+| 版本 | 根目錄 `VERSION`（`0.8.x`），標籤 `v0.8.x` | `relay-v1/VERSION`（提議 `1.0.0`，尚未標籤） |
+| 套件 | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.3.0`（`bdk` 執行檔是同一個檔案） |
+| 連接 Grok Bot | `cursor-grokbot-agents` | 本儲存庫的 `/v0/grokbot` HTTP 客戶端 |
+| 目前 | `sudo grokbot-relay install` | 只從這個樹的檢出做試用 |
+
+v1 不 import `cursor-grokbot-agents`。工具是 `grokbot__list`、`grokbot__ask`、`grokbot__check`。沒有 `grokbot__interrupt`。`list` 回傳的是允許清單，加上這位呼叫者已經問過的聯絡對象。不是帳號裡全部機器人的清單。空的允許清單會丟出錯誤，絕不是「任何名稱都可以」。每個 `POST …/messages` 本文前面都會加上 `[relay:claude-code]`。
+
+不要用 `bdk-upgrade` 走到 v1。v0 留在 `0.2.28`。拒絕更新的 `@cursor/bdk` 上限是下一項變更。兩條線都不追 npm `latest`。以後的安裝應檢出明確的標籤：`relay/` 用 `v0.8.x`，`relay-v1/` 在標籤存在之後用 `v1.0.0`。
+
+### 以後的伺服器試用（v1）
+
+在已經有 `grokbot` 使用者 Cursor 登入的伺服器上做。不要把 API 金鑰放在命令列。不要用 `/var/lib/grokbot/state`（那是正在跑的 v0 服務）。`ask` 若用新的機器人名稱，會建立一個空的機器人。請用 Grok Bot App 裡已經存在的名稱。把兩處的 `YOUR_EXISTING_BOT` 都換成那個名稱。
+
+`npm test` 和 `validate` 不會呼叫 API。`whoami` 只讀本機登入。若那個帳號不是機器人帳號就停下來。`grokbot__ask` 會送出一則真正的訊息。
+
+```bash
+cd relay-v1
+# Node 22+。這台伺服器上若 `node` 較舊，私人執行環境在 /opt/grokbot-relay/node/bin。
+export PATH="/opt/grokbot-relay/node/bin:$PATH"
+npm ci
+npm test
+./node_modules/.bin/agent-sdk validate --dir . --json
+
+# grokbot 使用者是 nologin。-H 會選它的家目錄，Cursor 登入在那裡。
+sudo -u grokbot -H ./node_modules/.bin/agent-sdk whoami --json
+
+sudo -u grokbot -H env GROKBOT_RELAY_AGENTS='YOUR_EXISTING_BOT' \
+  ./node_modules/.bin/agent-sdk tool call grokbot__ask --dir . \
+  --state-root /tmp/grokbot-relay-v1-trial \
+  --input '{"agent":"YOUR_EXISTING_BOT","message":"v1 trial ping","wait_seconds":60}' \
+  --json
+```
+
+允許清單在該行程啟動時讀取。空清單會拒絕這次呼叫，不代表所有機器人。回覆若是 `status: "running"`，用 `grokbot__check` 繼續等。沒有 interrupt 指令。
+
 ## 發行版本
 
-`VERSION` 是中繼的版本。發行版本是相同編號的 git 標籤 `vX.Y.Z`，以及說明取自 `CHANGELOG.md` 該節的 GitHub Release。見 [RELEASING.md](RELEASING.md)。
+根目錄 `VERSION` 是 v0 線（`0.8.x`）。`relay-v1/VERSION` 是 v1 線（提議 `1.0.0`，這次變更不打標籤）。`./bin/release` 只發佈根目錄那個檔案。該檔案的發行版本是 git 標籤 `vX.Y.Z`，以及說明取自 `CHANGELOG.md` 該節的 GitHub Release。見 [RELEASING.md](RELEASING.md)。
 
 ## 安全
 
