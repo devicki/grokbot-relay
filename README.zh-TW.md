@@ -91,13 +91,13 @@ sudo usermod -aG grokbot <user2>
 
 ```bash
 sudo grokbot-relay update                 # 在記錄的 clone 中 git pull、重新複製、npm ci、重新啟動；顯示 舊 -> 新 版本
-sudo grokbot-relay bdk-check              # 是否有更新的 @cursor/bdk？
-sudo grokbot-relay bdk-upgrade            # 升級、validate，通過則重新啟動，否則回滾
+sudo grokbot-relay bdk-check              # 是否有更新的 @cursor/bdk？（v0 不會安裝超過 0.2.28）
+sudo grokbot-relay bdk-upgrade            # 最多升到 0.2.28；更高的目標在 install 前拒絕
 ```
 
 > 不要直接執行 `bdk update`；請使用 `grokbot-relay bdk-upgrade`（中繼使用 `/opt` 底下自己的 bdk）。
 
-> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充，請不要升過 `0.2.28`。`relay-v1/` 的 v1 樹是另一條線，不會改動這個釘選。
+> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`bdk-upgrade` 會在 `npm install` 之前拒絕任何高於 `0.2.28` 的目標（`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充）。`relay-v1/` 的 v1 樹是 Agent SDK 0.3 的另一條線，不會改動這個釘選。見 [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md)。
 
 每位一般使用者（`usermod` 之後請登出再登入）：
 
@@ -147,8 +147,8 @@ claude plugin install grokbot-relay@dev-toolkit
 | `enable`、`disable` | 是 | 是否開機啟動 |
 | `update [-v]` | 是 | 在來源 clone 中 `git pull --ff-only`、重新複製、`npm ci`、重新啟動；保留 env 與 `agents.json`；精簡的步驟訊息與簡短的「What's new」；`-v` 顯示完整輸出 |
 | `node-upgrade` | 是 | 將私有 Node 執行環境更新到最新 24.x |
-| `bdk-check` | 否 | 比較已安裝與 npm 最新的 `@cursor/bdk`，附連結 |
-| `bdk-upgrade [--pin] [--dev] [-v]` | 是 | 在 `/opt` 中 `npm install @cursor/bdk@latest`、`bdk validate`，通過才重新啟動，否則回滾。`--pin` 會把 `relay/package*.json` 寫入來源 clone，方便你開 PR。`--dev`/`-v` 也會印出如何把升級分享到上游 |
+| `bdk-check` | 否 | 比較已安裝與 npm 最新的 `@cursor/bdk`，附連結。高於 `0.2.28` 的新版本會顯示，但不會當成 v0 的升級來建議 |
+| `bdk-upgrade [--pin] [--dev] [-v] [--dry-run]` | 是（`--dry-run` 不需 root） | 只有解析出的版本不高於 `0.2.28` 時才安裝到 `/opt`，再 `bdk validate`，通過才重新啟動，否則回滾。高於 `0.2.28` 的目標在下載前拒絕。`--dry-run` 只檢查這個上限，不安裝。`--pin` 會把 `relay/package*.json` 寫入來源 clone，方便你開 PR。`--dev`/`-v` 也會印出如何把升級分享到上游 |
 | `agents list` | 群組 | 允許的名稱 |
 | `agents pick` | 是 | 多選目前名稱（已預先勾選）並可手動輸入名稱。Grok Bot 帳號的機器人清單**無法取得**：@cursor/bdk 沒有清單路由，因此尚未加入的名稱必須手動輸入。在終端機執行不帶名稱的 `agents add` 會開啟相同的選擇畫面 |
 | `agents add NAME`、`agents remove NAME`、`agents edit` | 是 | 修改 `agents.json` 並重新啟動；拒絕空清單 |
@@ -193,7 +193,7 @@ sudo grokbot-relay uninstall --purge -y     # 全部移除，不詢問
 
 v1 不 import `cursor-grokbot-agents`。工具是 `grokbot__list`、`grokbot__ask`、`grokbot__check`。沒有 `grokbot__interrupt`。`list` 回傳的是允許清單，加上這位呼叫者已經問過的聯絡對象。不是帳號裡全部機器人的清單。空的允許清單會丟出錯誤，絕不是「任何名稱都可以」。每個 `POST …/messages` 本文前面都會加上 `[relay:claude-code]`。
 
-不要用 `bdk-upgrade` 走到 v1。v0 留在 `0.2.28`。拒絕更新的 `@cursor/bdk` 上限是下一項變更。兩條線都不追 npm `latest`。以後的安裝應檢出明確的標籤：`relay/` 用 `v0.8.x`，`relay-v1/` 在標籤存在之後用 `v1.0.0`。
+不要用 `bdk-upgrade` 走到 v1。v0 留在 `0.2.28`。`bdk-upgrade` 會在 `npm install` 之前拒絕高於 `0.2.28` 的 `@cursor/bdk`。兩條線都不追 npm `latest`。以後的安裝應檢出明確的標籤：`relay/` 用 `v0.8.x`，`relay-v1/` 在標籤存在之後用 `v1.0.0`。
 
 ### 以後的伺服器試用（v1）
 

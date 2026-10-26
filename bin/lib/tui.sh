@@ -360,7 +360,7 @@ t_login()    { ui_root_or_msg || return 1
 t_update()   { ui_root_or_msg && ui_yesno "Pull the source clone, recopy, npm ci and restart?\nenv and agents.json are kept." && ui_run "update" cmd_update; }
 t_node_up()  { ui_root_or_msg && ui_yesno "Refresh the private Node runtime to the latest $NODE_MAJOR.x?\nSHA256-checked; rolls back if validation fails." && ui_run "node-upgrade" cmd_node_upgrade; }
 t_bdk_check(){ ui_run "bdk-check" cmd_bdk_check; }
-t_bdk_up()   { ui_root_or_msg && ui_yesno "Upgrade @cursor/bdk to the latest version?\nIt is validated first; on failure it rolls back." && ui_run "bdk-upgrade" cmd_bdk_upgrade; }
+t_bdk_up()   { ui_root_or_msg && ui_yesno "Upgrade @cursor/bdk up to the v0 ceiling ($BDK_V0_MAX)?\nVersions above $BDK_V0_MAX are refused before install (cursor-grokbot-agents was removed).\nWithin the ceiling: validate first, roll back on failure." && ui_run "bdk-upgrade" cmd_bdk_upgrade; }
 t_doctor()   { ui_run "doctor" cmd_doctor; }
 # Connect guide: "Done by admin" (what this run did) + "Each user does" (copyable commands).
 U_ADDED=()
@@ -520,8 +520,8 @@ SERVICE_MENU=(
 t_service() { ui_loop "Service control" SERVICE_MENU; }
 
 BDK_MENU=(
-  "check|Check for a newer @cursor/bdk|t_bdk_check"
-  "upgrade|Upgrade @cursor/bdk (validate, rollback on failure)|t_bdk_up"
+  "check|Check @cursor/bdk (v0 will not pass $BDK_V0_MAX)|t_bdk_check"
+  "upgrade|Upgrade @cursor/bdk (refuses above $BDK_V0_MAX)|t_bdk_up"
   "node|Refresh private Node runtime (latest 24.x)|t_node_up"
   "back|Back|back"
 )

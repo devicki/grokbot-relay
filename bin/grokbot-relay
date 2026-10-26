@@ -400,18 +400,149 @@ cmd_update() {
 }
 
 # ---------------------------------------------------------------- bdk
+# v0 ceiling for relay/. 0.2.28 is the last @cursor/bdk that ships
+# cursor-grokbot-agents (ask, check, interrupt, list). 0.2.29 and the Agent
+# SDK 0.3 line remove that extension. cmd_bdk_upgrade refuses a greater target
+# before npm install. A v1 install path must not consult BDK_V0_MAX.
+BDK_V0_MAX=0.2.28
+
+# Fill namerefs with major, minor, patch, prerelease. Build metadata (+...) is
+# stripped. Return 1 when $1 is not a numeric X[.Y[.Z]] version.
+bdk_ver_parts() {
+  local v="${1%%+*}"
+  [[ "$v" =~ ^[0-9]+(\.[0-9]+){0,2}(-[0-9A-Za-z.-]+)?$ ]] || return 1
+  local core="$v" pre=""
+  if [[ "$v" == *-* ]]; then
+    core="${v%%-*}"
+    pre="${v#*-}"
+  fi
+  local -a p=()
+  IFS='.' read -r -a p <<< "$core" || return 1
+  printf -v "$2" '%s' "${p[0]}"
+  printf -v "$3" '%s' "${p[1]:-0}"
+  printf -v "$4" '%s' "${p[2]:-0}"
+  printf -v "$5" '%s' "$pre"
+}
+
+bdk_ver_ok() {
+  local maj min pat pre
+  bdk_ver_parts "$1" maj min pat pre || return 1
+  # Prerelease may be empty. The numeric core must be filled.
+  [[ "$maj" =~ ^[0-9]+$ && "$min" =~ ^[0-9]+$ && "$pat" =~ ^[0-9]+$ && "$pre" != *$'\n'* ]]
+}
+
+# Return 0 when prerelease $1 > prerelease $2 (semver: numeric < non-numeric).
+bdk_pre_gt() {
+  local x y i n m len xn yn
+  local LC_ALL=C
+  local -a A=() B=()
+  IFS='.' read -r -a A <<< "$1"
+  IFS='.' read -r -a B <<< "$2"
+  n=${#A[@]}
+  m=${#B[@]}
+  if (( n > m )); then len=$n; else len=$m; fi
+  for (( i=0; i<len; i++ )); do
+    x="${A[i]:-}"
+    y="${B[i]:-}"
+    if [[ -z "$x" ]]; then return 1; fi
+    if [[ -z "$y" ]]; then return 0; fi
+    xn=0; yn=0
+    [[ "$x" =~ ^[0-9]+$ ]] && xn=1
+    [[ "$y" =~ ^[0-9]+$ ]] && yn=1
+    if (( xn == 1 && yn == 1 )); then
+      if (( 10#$x > 10#$y )); then return 0; fi
+      if (( 10#$x < 10#$y )); then return 1; fi
+    elif (( xn == 1 )); then
+      return 1
+    elif (( yn == 1 )); then
+      return 0
+    else
+      if [[ "$x" > "$y" ]]; then return 0; fi
+      if [[ "$x" < "$y" ]]; then return 1; fi
+    fi
+  done
+  return 1
+}
+
+# Return 0 when $1 > $2, 1 when $1 <= $2, 2 when either side is not a version.
+# A prerelease is less than the same release (0.2.28-rc.1 < 0.2.28).
+bdk_ver_gt() {
+  local a_maj a_min a_pat a_pre b_maj b_min b_pat b_pre
+  bdk_ver_parts "$1" a_maj a_min a_pat a_pre || return 2
+  bdk_ver_parts "$2" b_maj b_min b_pat b_pre || return 2
+  if (( 10#$a_maj > 10#$b_maj )); then return 0; fi
+  if (( 10#$a_maj < 10#$b_maj )); then return 1; fi
+  if (( 10#$a_min > 10#$b_min )); then return 0; fi
+  if (( 10#$a_min < 10#$b_min )); then return 1; fi
+  if (( 10#$a_pat > 10#$b_pat )); then return 0; fi
+  if (( 10#$a_pat < 10#$b_pat )); then return 1; fi
+  if [[ -z "$a_pre" && -z "$b_pre" ]]; then return 1; fi
+  if [[ -n "$a_pre" && -z "$b_pre" ]]; then return 1; fi
+  if [[ -z "$a_pre" && -n "$b_pre" ]]; then return 0; fi
+  bdk_pre_gt "$a_pre" "$b_pre"
+}
+
+# Return 0 when v0 must not install $1 (greater than BDK_V0_MAX, or not a version).
+bdk_v0_above_ceiling() {
+  local rc=0
+  bdk_ver_gt "$1" "$BDK_V0_MAX" || rc=$?
+  [[ "$rc" -ne 1 ]]
+}
+
+bdk_v0_ceiling_msg() {
+  cat <<EOF
+refusing to install $NPM_PKG@$1.
+The v0 relay (relay/) stops at $BDK_V0_MAX, the last release that ships cursor-grokbot-agents.
+0.2.29 and later, including the Agent SDK 0.3 line, remove that extension.
+Use the v1 relay instead of upgrading this line. See docs/spike-bdk-0.3.md.
+Nothing was installed.
+EOF
+}
+
+bdk_npm_latest() {
+  local v=""
+  v="$(npm view "$NPM_PKG" version 2>/dev/null | tail -n1 | tr -d '[:space:]' || true)"
+  printf '%s\n' "$v"
+}
+
+# Decision lines for bdk-check. $1 = installed version or "none", $2 = npm latest or "unknown".
+bdk_v0_check_decision() {
+  local cur="$1" latest="$2"
+  if [[ "$latest" == unknown || -z "$latest" ]]; then
+    echo "Could not read the latest version from npm."
+    return 0
+  fi
+  if bdk_v0_above_ceiling "$latest"; then
+    echo "npm latest ($latest) is past the v0 ceiling ($BDK_V0_MAX)."
+    echo "v0 (relay/) will not install it. 0.2.29 and later remove cursor-grokbot-agents."
+    echo "Agent SDK 0.3 is the v1 relay. See docs/spike-bdk-0.3.md."
+    if [[ "$cur" != none && -n "$cur" ]] && bdk_v0_above_ceiling "$cur"; then
+      echo "Installed $cur is already above the v0 ceiling. relay/ needs $BDK_V0_MAX."
+    elif [[ "$cur" != none && -n "$cur" ]] && bdk_ver_gt "$BDK_V0_MAX" "$cur"; then
+      echo "This install ($cur) is below $BDK_V0_MAX. Reach the ceiling with: sudo grokbot-relay update"
+    fi
+    return 0
+  fi
+  if [[ "$cur" == none || -z "$cur" ]]; then
+    echo "Not installed. The v0 ceiling is $BDK_V0_MAX."
+    return 0
+  fi
+  if bdk_ver_gt "$latest" "$cur"; then
+    echo "An update within the v0 ceiling is available: sudo grokbot-relay bdk-upgrade"
+    return 0
+  fi
+  echo "Up to date within the v0 ceiling ($BDK_V0_MAX)."
+}
+
 cmd_bdk_check() {
-  local cur latest
+  local cur latest repo
   cur="$(installed_bdk)"
-  latest="$(npm view "$NPM_PKG" version 2>/dev/null || echo unknown)"
+  latest="$(bdk_npm_latest)"
+  [[ -n "$latest" ]] || latest=unknown
   echo "installed $NPM_PKG: $cur"
   echo "latest    $NPM_PKG: $latest"
-  if [[ "$cur" != "$latest" && "$latest" != unknown ]]; then
-    echo "An update is available: sudo grokbot-relay bdk-upgrade"
-  else
-    echo "Up to date."
-  fi
-  local repo
+  echo "v0 max    $NPM_PKG: $BDK_V0_MAX"
+  bdk_v0_check_decision "$cur" "$latest"
   repo="$(npm view "$NPM_PKG" repository.url 2>/dev/null || true)"
   echo "npm page:  https://www.npmjs.com/package/$NPM_PKG?activeTab=versions"
   [[ -n "$repo" ]] && echo "repository: $repo"
@@ -419,15 +550,47 @@ cmd_bdk_check() {
 }
 
 cmd_bdk_upgrade() {
+  local pin=0 dev=0 dry=0 target="" a
+  while [[ $# -gt 0 ]]; do
+    a="$1"; shift
+    case "$a" in
+      --pin) pin=1 ;;
+      --dev) dev=1 ;;
+      -v|--verbose) export GRB_VERBOSE=1; dev=1 ;;
+      --dry-run) dry=1 ;;
+      --target)
+        [[ $# -gt 0 ]] || die "bdk-upgrade: --target needs a version"
+        target="$1"; shift ;;
+      --target=*) target="${a#--target=}" ;;
+      *) die "bdk-upgrade: unknown option $a (use --pin, --dev, -v, --dry-run)" ;;
+    esac
+  done
+  if (( dry && pin )); then
+    die "bdk-upgrade: --dry-run does not change files (drop --pin)."
+  fi
+  if [[ -n "$target" && "$dry" -eq 0 ]]; then
+    die "bdk-upgrade: --target is only valid with --dry-run. The install resolves npm latest and refuses any version above $BDK_V0_MAX before npm install."
+  fi
+  if [[ -z "$target" ]]; then
+    target="$(bdk_npm_latest)"
+    [[ -n "$target" ]] || die "bdk-upgrade: could not read the latest $NPM_PKG version from npm. Refusing to install. Nothing was changed."
+  fi
+  if bdk_v0_above_ceiling "$target"; then
+    die "$(bdk_v0_ceiling_msg "$target")"
+  fi
+  if (( dry )); then
+    echo "bdk-upgrade dry-run: $NPM_PKG@$target is within the v0 ceiling ($BDK_V0_MAX). No install."
+    return 0
+  fi
   need_root bdk-upgrade
-  local pin=0 dev=0 a
-  for a in "$@"; do case "$a" in --pin) pin=1 ;; --dev) dev=1 ;; -v|--verbose) export GRB_VERBOSE=1; dev=1 ;; *) die "bdk-upgrade: unknown option $a (use --pin, --dev, -v)" ;; esac; done
   [[ -d "$RELAY_DIR" ]] || die "Not installed."
+  bdk_ver_ok "$target" || die "bdk-upgrade: refusing unparsed version '$target'. Nothing was installed."
   local old new bak
   old="$(installed_bdk)"
   bak="$(mktemp -d)"
   cp "$RELAY_DIR/package.json" "$RELAY_DIR/package-lock.json" "$bak/" 2>/dev/null || true
-  step "Upgrading $NPM_PKG ($old → latest)" as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund --loglevel=error $NPM_PKG@latest" \
+  # Exact version from the ceiling check, not @latest: a publish in between cannot jump BDK_V0_MAX.
+  step "Upgrading $NPM_PKG ($old → $target)" as_svc "cd '$RELAY_DIR' && $NPM_ENV npm install --no-audit --no-fund --loglevel=error '${NPM_PKG}@${target}'" \
     || die "npm install failed; nothing changed in the running service."
   step "Rebuilding native deps" npm_rebuild || true
   header_check
@@ -813,13 +976,19 @@ Agents
   agents edit               edit agents.json in $EDITOR (root), validated before saving
 BDK
   node-upgrade              refresh the private Node runtime to the latest 24.x (root)
-  bdk-check                 compare installed @cursor/bdk with npm latest
-  bdk-upgrade [--pin] [--dev|-v]  upgrade @cursor/bdk, validate, restart or roll back (root);
-                            --dev/-v also prints how to share the bump upstream
-                            --pin also writes package*.json into the source clone for a PR
+  bdk-check                 compare installed @cursor/bdk with npm latest.
+                            A release above 0.2.28 is reported, not offered as a v0 upgrade.
+  bdk-upgrade [--pin] [--dev|-v] [--dry-run]
+                            upgrade @cursor/bdk within the v0 ceiling 0.2.28 (root).
+                            A target above 0.2.28 is refused before npm install.
+                            Then validate, restart or roll back. --dry-run checks the
+                            ceiling and does not install (no root). --dev/-v prints how
+                            to share a bump upstream. --pin writes package*.json into
+                            the source clone for a PR.
   NOTE: don't run 'bdk update' directly; use 'grokbot-relay bdk-upgrade'
         (the relay uses its own bdk under /opt).
-        Do not upgrade past @cursor/bdk 0.2.28: 0.2.29+ removes cursor-grokbot-agents.
+        v0 stops at @cursor/bdk 0.2.28 (cursor-grokbot-agents).
+        Agent SDK 0.3 is the v1 line. See docs/spike-bdk-0.3.md.
 Other
   uninstall [--purge|--keep-config] [-y]  remove service, /opt app, CLI link (root);
                             asks before config, login/state, and the grokbot user
@@ -858,4 +1027,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
