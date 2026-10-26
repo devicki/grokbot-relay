@@ -1,0 +1,18 @@
+{
+  "name": "grokbot-relay-bdk-0.3-spike",
+  "private": true,
+  "type": "module",
+  "description": "Isolated spike. Not the production relay. See docs/spike-bdk-0.3.md.",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "validate": "agent-sdk validate --dir . --json"
+  },
+  "dependencies": {
+    "@grok/agent-sdk": "0.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "typescript": "6.0.3"
+  }
+}
