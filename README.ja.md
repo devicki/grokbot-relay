@@ -91,13 +91,13 @@ sudo usermod -aG grokbot <user2>
 
 ```bash
 sudo grokbot-relay update                 # 記録された clone で git pull、再コピー、npm ci、再起動。旧 -> 新バージョンを表示
-sudo grokbot-relay bdk-check              # 新しい @cursor/bdk が出ているか
-sudo grokbot-relay bdk-upgrade            # 更新して validate、通れば再起動、失敗ならロールバック
+sudo grokbot-relay bdk-check              # 新しい @cursor/bdk が出ているか（v0 は 0.2.28 を超えて入れない）
+sudo grokbot-relay bdk-upgrade            # 0.2.28 まで更新。それを超える版は install の前に拒否
 ```
 
 > `bdk update` を直接実行しないでください。`grokbot-relay bdk-upgrade` を使います（リレーは `/opt` 配下の独自の bdk を使います）。
 
-> このリリースは `@cursor/bdk` をちょうど `0.2.28` に固定します。`0.2.29` 以降は `cursor-grokbot-agents` 拡張を外すので、`0.2.28` より先へ上げないでください。`relay-v1/` の v1 ツリーは別ラインで、この固定は動きません。
+> このリリースは `@cursor/bdk` をちょうど `0.2.28` に固定します。`bdk-upgrade` は `0.2.28` より新しい対象を `npm install` の前に拒否します（`0.2.29` 以降は `cursor-grokbot-agents` 拡張を外します）。`relay-v1/` の v1 ツリーは Agent SDK 0.3 の別ラインで、この固定は動きません。[docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md) を参照してください。
 
 各一般ユーザー（`usermod` のあと一度ログアウトして再ログイン）：
 
@@ -147,8 +147,8 @@ claude plugin install grokbot-relay@dev-toolkit
 | `enable`、`disable` | 要 | 起動時に開始するかどうか |
 | `update [-v]` | 要 | ソース clone で `git pull --ff-only`、再コピー、`npm ci`、再起動。env と `agents.json` は維持。簡潔なステップ表示と短い「What's new」。`-v` で全出力 |
 | `node-upgrade` | 要 | 独自 Node ランタイムを最新の 24.x に更新 |
-| `bdk-check` | 不要 | インストール済みと npm 最新の `@cursor/bdk` を比較、リンク付き |
-| `bdk-upgrade [--pin] [--dev] [-v]` | 要 | `/opt` で `npm install @cursor/bdk@latest`、`bdk validate`、通った場合のみ再起動、失敗ならロールバック。`--pin` はソース clone の `relay/package*.json` を書き換え PR を出せるようにする。`--dev`/`-v` はアップストリームへの共有方法も表示 |
+| `bdk-check` | 不要 | インストール済みと npm 最新の `@cursor/bdk` を比較、リンク付き。`0.2.28` を超える新しい版は表示するが、v0 の更新としては案内しない |
+| `bdk-upgrade [--pin] [--dev] [-v] [--dry-run]` | 要（`--dry-run` は root 不要） | 解決した版が `0.2.28` 以下のときだけ `/opt` に入れ、`bdk validate`、通った場合のみ再起動、失敗ならロールバック。`0.2.28` を超える対象はダウンロード前に拒否。`--dry-run` はその上限だけ確認し、インストールしない。`--pin` はソース clone の `relay/package*.json` を書き換え PR を出せるようにする。`--dev`/`-v` はアップストリームへの共有方法も表示 |
 | `agents list` | グループ | 許可された名前 |
 | `agents pick` | 要 | 現在の名前（チェック済み）の複数選択 + 手入力。Grok Bot アカウントのボット一覧は **取得できません**：@cursor/bdk に一覧取得のルートがないため、まだ追加していない名前は入力する必要があります。ターミナルで名前なしの `agents add` を実行すると同じ選択画面が開きます |
 | `agents add NAME`、`agents remove NAME`、`agents edit` | 要 | `agents.json` を変更して再起動。空リストは拒否 |
@@ -193,7 +193,7 @@ sudo grokbot-relay uninstall --purge -y     # すべて削除、確認なし
 
 v1 は `cursor-grokbot-agents` を import しません。ツールは `grokbot__list`、`grokbot__ask`、`grokbot__check` です。`grokbot__interrupt` はありません。`list` が返すのは許可リストと、この呼び出し元がすでに尋ねた相手です。アカウント全体のボット一覧ではありません。空の許可リストは例外になり、任意の名前を許すという意味にはなりません。すべての `POST …/messages` 本文の先頭に `[relay:claude-code]` が付きます。
 
-v1 に進むために `bdk-upgrade` を使わないでください。v0 は `0.2.28` のままです。より新しい `@cursor/bdk` を拒む上限は次の変更です。どちらのラインも npm `latest` を追いません。後のインストールは明示的なタグをチェックアウトします。`relay/` は `v0.8.x`、`relay-v1/` はタグができてから `v1.0.0` です。
+v1 に進むために `bdk-upgrade` を使わないでください。v0 は `0.2.28` のままです。`bdk-upgrade` は `0.2.28` より新しい `@cursor/bdk` を `npm install` の前に拒否します。どちらのラインも npm `latest` を追いません。後のインストールは明示的なタグをチェックアウトします。`relay/` は `v0.8.x`、`relay-v1/` はタグができてから `v1.0.0` です。
 
 ### 後のサーバー試行（v1）
 

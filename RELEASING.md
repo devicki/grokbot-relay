@@ -71,7 +71,7 @@ Repeat with the table. Skip any tag that already exists. Never pass `--force` to
 
 Root `VERSION` is the v0 line. `./bin/release` reads only that file and the matching `## X.Y.Z` section of `CHANGELOG.md`. Do not put `1.0.0` in the root file to publish v1: that would make `./bin/release` tag the whole repo as `v1.0.0` and would stop naming the v0 line.
 
-v1's number is `relay-v1/VERSION`. This change sets it to `1.0.0` as the proposed first release and does not create the tag. `## Unreleased` in `CHANGELOG.md` is the note. `./bin/release` does not see it, because the root file is still `0.8.2`.
+v1's number is `relay-v1/VERSION`. It is `1.0.0` as the proposed first release and does not create the tag. The note is the `### v1 line` part of `## 0.8.3` in `CHANGELOG.md`. `./bin/release` publishes root `VERSION` (`0.8.3` for the ceiling release) as `v0.8.3` and does not create `v1.0.0`.
 
 After a server trial of `relay-v1/` (`whoami`, then an allowlisted `grokbot__ask` against a bot that already exists) succeeds, cut the tag by hand from the commit whose `relay-v1/VERSION` is `1.0.0`:
 

@@ -91,13 +91,13 @@ sudo usermod -aG grokbot <사용자2>
 
 ```bash
 sudo grokbot-relay update                 # 기록된 clone에서 git pull, 다시 복사, npm ci, 재시작. 이전 → 새 버전 표시
-sudo grokbot-relay bdk-check              # 새 @cursor/bdk가 나왔는지
-sudo grokbot-relay bdk-upgrade            # 올리고 validate, 통과하면 재시작, 실패하면 되돌림
+sudo grokbot-relay bdk-check              # 새 @cursor/bdk가 나왔는지 (v0는 0.2.28을 넘어 설치하지 않음)
+sudo grokbot-relay bdk-upgrade            # 0.2.28까지 올림. 그보다 높은 버전은 install 전에 거부
 ```
 
 > `bdk update`를 직접 실행하지 마세요. `grokbot-relay bdk-upgrade`를 쓰세요(relay는 `/opt` 아래의 자체 bdk를 씁니다).
 
-> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `0.2.29` 이상은 `cursor-grokbot-agents` 확장을 빼므로 `0.2.28`을 넘어 올리지 마세요. `relay-v1/`의 v1 트리는 별도 라인이며 이 고정을 바꾸지 않습니다.
+> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `bdk-upgrade`는 `0.2.28`보다 높은 대상을 `npm install` 전에 거부합니다 (`0.2.29` 이상은 `cursor-grokbot-agents` 확장을 뺍니다). `relay-v1/`의 v1 트리는 Agent SDK 0.3의 별도 라인이며 이 고정을 바꾸지 않습니다. [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md)를 보세요.
 
 일반 사용자 각자 (`usermod` 후 다시 로그인):
 
@@ -147,8 +147,8 @@ claude plugin install grokbot-relay@dev-toolkit
 | `enable`, `disable` | 필요 | 부팅 시 자동 시작 켜기·끄기 |
 | `update [-v]` | 필요 | 원본 clone에서 `git pull --ff-only`, 다시 복사, `npm ci`, 재시작. env와 `agents.json`은 유지; 단계별 짧은 진행 표시와 "What's new" 요약, `-v`는 전체 출력 |
 | `node-upgrade` | 필요 | 자체 Node 런타임을 최신 24.x로 교체 |
-| `bdk-check` | 불필요 | 설치된 `@cursor/bdk`와 npm 최신 버전 비교, 링크 표시 |
-| `bdk-upgrade [--pin] [--dev] [-v]` | 필요 | `/opt`에서 `npm install @cursor/bdk@latest`, `bdk validate` 통과 시에만 재시작, 실패하면 되돌림. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함. `--dev`/`-v`는 업스트림 공유 방법도 출력 |
+| `bdk-check` | 불필요 | 설치된 `@cursor/bdk`와 npm 최신 버전 비교, 링크 표시. `0.2.28`을 넘는 새 버전은 알려 주지만 v0 업그레이드로는 안내하지 않음 |
+| `bdk-upgrade [--pin] [--dev] [-v] [--dry-run]` | 필요 (`--dry-run`은 root 불필요) | 결정된 버전이 `0.2.28` 이하일 때만 `/opt`에 설치하고 `bdk validate`를 통과했을 때만 재시작, 실패하면 되돌림. `0.2.28`을 넘는 대상은 다운로드 전에 거부. `--dry-run`은 그 상한만 확인하고 설치하지 않음. `--pin`은 원본 clone의 `relay/package*.json`도 바꿔 PR을 올릴 수 있게 함. `--dev`/`-v`는 업스트림 공유 방법도 출력 |
 | `agents list` | 그룹 | 허용된 이름 |
 | `agents pick` | 필요 | 현재 이름(미리 체크)의 다중 선택 + 직접 입력. Grok Bot 계정의 봇 목록은 **가져올 수 없습니다**: @cursor/bdk에 목록 조회 경로가 없어서, 아직 넣지 않은 이름은 직접 입력해야 합니다. 터미널에서 이름 없이 `agents add`를 실행하면 같은 선택 화면이 열립니다 |
 | `agents add NAME`, `agents remove NAME`, `agents edit` | 필요 | `agents.json` 수정 후 재시작. 빈 목록은 거부 |
@@ -193,7 +193,7 @@ sudo grokbot-relay uninstall --purge -y     # 전부 삭제, 묻지 않음
 
 v1은 `cursor-grokbot-agents`를 import하지 않습니다. 도구는 `grokbot__list`, `grokbot__ask`, `grokbot__check`입니다. `grokbot__interrupt`는 없습니다. `list`는 허용 목록과 이 호출자가 이미 물어본 연락처만 돌려줍니다. 계정 전체 봇 목록이 아닙니다. 빈 허용 목록은 예외를 던지며, 어떤 이름이든 허용한다는 뜻이 아닙니다. 모든 `POST …/messages` 본문 앞에 `[relay:claude-code]`가 붙습니다.
 
-v1에 가려고 `bdk-upgrade`를 쓰지 마세요. v0는 `0.2.28`에 남습니다. 더 새 `@cursor/bdk`를 거부하는 상한은 다음 변경입니다. 어느 라인도 npm `latest`를 따라가면 안 됩니다. 나중 설치는 명시적 태그를 체크아웃합니다. `relay/`는 `v0.8.x`, `relay-v1/`은 태그가 생긴 뒤 `v1.0.0`입니다.
+v1에 가려고 `bdk-upgrade`를 쓰지 마세요. v0는 `0.2.28`에 남습니다. `bdk-upgrade`는 `0.2.28`보다 높은 `@cursor/bdk`를 `npm install` 전에 거부합니다. 어느 라인도 npm `latest`를 따라가면 안 됩니다. 나중 설치는 명시적 태그를 체크아웃합니다. `relay/`는 `v0.8.x`, `relay-v1/`은 태그가 생긴 뒤 `v1.0.0`입니다.
 
 ### 나중 서버 시험 (v1)
 

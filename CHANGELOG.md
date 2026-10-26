@@ -1,13 +1,14 @@
 # Changelog
 
-## Unreleased
-
-v1 sits beside v0 and is not tagged. Root `VERSION` stays `0.8.2`. `./bin/release` still publishes only that root file, so this change does not cut `v0.8.3` or `v1.0.0`.
+## 0.8.3
+- `bdk-upgrade` refuses any `@cursor/bdk` target above `0.2.28` before `npm install`. That release is the last one that ships `cursor-grokbot-agents`. Newer releases, including Agent SDK 0.3, are the v1 line (`docs/spike-bdk-0.3.md` and `relay-v1/`). A target within the ceiling is installed at that exact version. Rollback after a failed `bdk validate` is unchanged. `--dry-run` checks the ceiling and does not install.
+- `bdk-check` still reports npm latest when a newer SDK exists, and it no longer tells you to run `bdk-upgrade` for a version above that ceiling.
+- v1 (`relay-v1/`, proposed `1.0.0`) sits beside this v0 release and is not tagged. `./bin/release` publishes root `VERSION` only, so this tag is `v0.8.3` and does not cut `v1.0.0`.
 
 ### v1 line (`relay-v1/`, proposed `1.0.0`)
 
 - New tree `relay-v1/` on `@grok/agent-sdk@0.3.0`. It does not import `cursor-grokbot-agents`. It calls `POST /v0/grokbot/sessions`, `POST …/messages`, and `GET …/entries` itself. `grokbot__list` is the allowlist plus this caller's contacts (there is still no account-wide list). `grokbot__ask` get-or-creates a session, sends, and polls entries. `grokbot__check` resumes a running turn. `grokbot__interrupt` is not mounted. An empty allowlist throws and is never "any name". Every message body is prefixed with `[relay:claude-code]`.
-- Versioning: v0 remains root `VERSION` `0.8.x` and tag `v0.8.x`, installed from `relay/`. v1's number lives in `relay-v1/VERSION`. `1.0.0` there is the proposed first tag `v1.0.0`, to be cut only after a server trial of `whoami` plus an allowlisted `ask`. Install checks out an explicit tag. It does not track npm `latest`. `bin/grokbot-relay` and the systemd unit still install v0. See RELEASING.md.
+- Versioning: v0 remains root `VERSION` `0.8.x` (this ceiling release is `0.8.3`) and tag `v0.8.x`, installed from `relay/`. v1's number lives in `relay-v1/VERSION`. `1.0.0` there is the proposed first tag `v1.0.0`, to be cut only after a server trial of `whoami` plus an allowlisted `ask`. Install checks out an explicit tag. It does not track npm `latest`. `bin/grokbot-relay` and the systemd unit still install v0. `bdk-upgrade` refuses `@cursor/bdk` above `0.2.28` and is not how you reach v1. See RELEASING.md.
 
 ## 0.8.2
 - relay: pin `@cursor/bdk` to exactly `0.2.28` in `package.json`, with `package-lock.json` refreshed. `0.2.28` still ships `cursor-grokbot-agents` (`ask`, `check`, `interrupt`, `list`). `0.2.29` and later remove that extension; stay on `0.2.28`. `allowScripts` is unchanged. This relay does not use the 0.2.28 removals (semantic search, and the unpublished `CATCH_DELIVERY_ID_HEADER`, `attachRelayMcp`, `CursorBackendClient`, and `postRelaySlackMessage` exports).

@@ -91,13 +91,13 @@ Update later:
 
 ```bash
 sudo grokbot-relay update                 # git pull the recorded clone, recopy, npm ci, restart; shows old -> new version
-sudo grokbot-relay bdk-check              # is a newer @cursor/bdk out?
-sudo grokbot-relay bdk-upgrade            # upgrade, validate, restart or roll back
+sudo grokbot-relay bdk-check              # newer @cursor/bdk? v0 will not install past 0.2.28
+sudo grokbot-relay bdk-upgrade            # upgrade up to 0.2.28; higher targets are refused before install
 ```
 
 > Don't run `bdk update` directly; use `grokbot-relay bdk-upgrade` (the relay uses its own bdk under `/opt`).
 
-> This release pins `@cursor/bdk` to exactly `0.2.28`. `0.2.29` and later remove the `cursor-grokbot-agents` extension, so do not upgrade past `0.2.28`. The v1 tree in `relay-v1/` is a separate line and does not move this pin.
+> This release pins `@cursor/bdk` to exactly `0.2.28`. `bdk-upgrade` refuses any target above `0.2.28` before `npm install` (`0.2.29` and later remove `cursor-grokbot-agents`). The v1 tree in `relay-v1/` is a separate Agent SDK 0.3 line and does not move this pin. See [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md).
 
 Each regular user (log out and back in after `usermod`):
 
@@ -147,8 +147,8 @@ Run `sudo grokbot-relay` (no arguments) on a terminal to open the menu.
 | `enable`, `disable` | yes | start at boot or not |
 | `update [-v]` | yes | `git pull --ff-only` in the source clone, recopy, `npm ci`, restart; env and `agents.json` kept; quiet step lines and a short "What's new"; `-v` shows full output |
 | `node-upgrade` | yes | refresh the private Node runtime to the latest 24.x |
-| `bdk-check` | no | installed vs npm latest `@cursor/bdk`, with links |
-| `bdk-upgrade [--pin] [--dev] [-v]` | yes | `npm install @cursor/bdk@latest` in `/opt`, `bdk validate`, restart only if it passes, else roll back. `--pin` writes `relay/package*.json` into the source clone so you can open a PR. `--dev`/`-v` also prints how to share the bump upstream |
+| `bdk-check` | no | installed vs npm latest `@cursor/bdk`, with links. A newer release above `0.2.28` is reported and is not offered as a v0 upgrade |
+| `bdk-upgrade [--pin] [--dev] [-v] [--dry-run]` | yes (`--dry-run` needs no root) | installs the resolved `@cursor/bdk` version in `/opt` only when it is at most `0.2.28`, then `bdk validate`, restart only if that passes, else roll back. A target above `0.2.28` is refused before download. `--dry-run` checks the ceiling and does not install. `--pin` writes `relay/package*.json` into the source clone so you can open a PR. `--dev`/`-v` also prints how to share the bump upstream |
 | `agents list` | group | allowed names |
 | `agents pick` | yes | multi-select of the current names (pre-checked) plus manual names. The Grok Bot account list is **not** available: @cursor/bdk has no list route, so names you have not added yet must be typed. `agents add` with no name on a terminal opens the same picker |
 | `agents add NAME`, `agents remove NAME`, `agents edit` | yes | change `agents.json` and restart; an empty list is refused |
@@ -193,7 +193,7 @@ The install above is the **v0** line (`relay/`, `@cursor/bdk@0.2.28`, `cursor-gr
 
 v1 does not import `cursor-grokbot-agents`. Tools are `grokbot__list`, `grokbot__ask`, and `grokbot__check`. `grokbot__interrupt` is not mounted. `list` returns the allowlist plus contacts this caller has already asked. It is not an account-wide bot list. An empty allowlist throws and is never treated as any name. Every `POST …/messages` body is prefixed with `[relay:claude-code]`.
 
-Do not use `bdk-upgrade` to reach v1. v0 stays on `0.2.28`. A ceiling that refuses newer `@cursor/bdk` is a later change. Neither line should track npm `latest`. A later install should check out an explicit tag: `v0.8.x` for `relay/`, and `v1.0.0` for `relay-v1/` once that tag exists.
+Do not use `bdk-upgrade` to reach v1. v0 stays on `0.2.28`. `bdk-upgrade` refuses anything above `0.2.28` before `npm install`. Neither line should track npm `latest`. A later install should check out an explicit tag: `v0.8.x` for `relay/`, and `v1.0.0` for `relay-v1/` once that tag exists.
 
 ### Later server trial (v1)
 

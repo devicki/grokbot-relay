@@ -50,7 +50,7 @@ These are the production couplings. The 0.2.27 pin still satisfies them. 0.3.0 d
 | `npm run dev` | `bdk dev` | `dev` is still `serve --dev`. |
 | `fetch_account_bots` in `bin/grokbot-relay` | Comment: account list is unavailable; only `/v0/grokbot` session routes exist | Still true. `GET /v0/grokbot/agents` is 404. |
 
-`bdk-upgrade` runs `npm install @cursor/bdk@latest`, then `bdk validate`, and rolls back when validate fails. Latest on 2026-10-26 is `0.3.0`. On the current tree that validate fails, so the script's own rollback path should restore `0.2.27` and `header_check` should put `ask.ts` back once `ask.js` exists again. That path was read from `bin/grokbot-relay` and was not executed (it needs the systemd install). `--pin` writes into the source clone only after validate passes, so a failed 0.3 upgrade does not rewrite the pin by itself.
+`bdk-upgrade` resolves npm `latest` and refuses anything above `0.2.28` (`BDK_V0_MAX` in `bin/grokbot-relay`) before `npm install`. On 2026-10-26 that latest was `0.3.0`, so the command stops instead of downloading it and restarting the service. A target within the ceiling is installed at that exact version, then `bdk validate` runs, and a failed validate still rolls back. `--pin` writes into the source clone only after validate passes. `--dry-run` applies the same ceiling and does not install.
 
 ## CLI surface that still exists
 
@@ -135,7 +135,7 @@ Keep `main` on the current pin. `@cursor/bdk@0.2.28` is the last release whose t
 
 The live `open-session` command above succeeded on the owner's account (see the update at the top). The second line is `relay-v1/`. It is not what `bin/grokbot-relay` installs.
 
-- **v0.x** stays this tree: `@cursor/bdk` at `0.2.28`. `bdk-upgrade` should refuse anything above `0.2.28` before it runs `npm install`. That guard is not in this branch.
+- **v0.x** stays this tree: `@cursor/bdk` at `0.2.28`. `bdk-upgrade` refuses anything above `0.2.28` before `npm install` (`BDK_V0_MAX` in `bin/grokbot-relay`). That ceiling is only the v0 `relay/` path. A v1 install must not use it.
 - **v1.x** is `relay-v1/`. Its dependency is `@grok/agent-sdk@0.3.0` (same code as `@cursor/bdk@0.3.x`). It mounts its own tools over `bot/lib/grokbot-http.ts`, keeps the allowlist and the `[relay:claude-code]` header in front of `POST …/messages`, and keeps interrupt disabled. It does not import `cursor-grokbot-agents`. Proposed version `1.0.0` in `relay-v1/VERSION` is not tagged yet.
 - Install is already git plus `/opt`, so a second npm package name is optional. A major version tag, or a long-lived `release/0.2` branch with `main` moving only when v1 is proven, is enough. The install script should check out an explicit tag. It should not track npm `latest`.
 - `connect-claude` can keep calling `bdk mcp --url --bearer-token` on 0.3, because bare `mcp` is still the stdio proxy. The unit's `bdk serve` flags listed above still match `help serve`.
@@ -145,7 +145,7 @@ The live `open-session` command above succeeded on the owner's account (see the 
 - The 0.3 package says the extension has no replacement. The routes answering 401 is behavior observed on one day, not a documented SDK API. They can be removed without an SDK minor bump.
 - `POST /v0/grokbot/sessions` creates a bot when the name is new. The production relay already warns about that.
 - Callers still share one Cursor account and one bot memory, same as today.
-- `bdk-check` will report `0.3.0` as newer than `0.2.27` and invite `bdk-upgrade`. The upgrade should roll back after validate fails. Until a ceiling exists, that command is a large download and a service-restart attempt, and it is the wrong way to reach this spike.
+- `bdk-check` reports npm latest when it is newer than the install, including `0.3.0`. It does not offer `bdk-upgrade` for a version above `0.2.28`. `bdk-upgrade` refuses that target before download. Rollback after a failed validate remains for an install that stays within the ceiling. Neither command is how you reach this spike or the v1 relay.
 - Website guides that still import `cursor-grokbot-agents` will mislead a port that trusts docs over the tarball.
 - `open-session` on a logged-in host is a write. Leave `GROKBOT_SPIKE_CONFIRM` unset except for that one command.
 - Proving ask, the sender header, allowlist refusal, and MCP-through-`serve` on the live account still needs the owner's login and an existing bot. `relay-v1/` covers those in unit tests with a mock fetch. The server trial is in the root README. This spike does not start `serve`.
