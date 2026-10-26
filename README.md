@@ -97,6 +97,8 @@ sudo grokbot-relay bdk-upgrade            # upgrade, validate, restart or roll b
 
 > Don't run `bdk update` directly; use `grokbot-relay bdk-upgrade` (the relay uses its own bdk under `/opt`).
 
+> This release pins `@cursor/bdk` to exactly `0.2.28`. `0.2.29` and later remove the `cursor-grokbot-agents` extension, so do not upgrade past `0.2.28`.
+
 Each regular user (log out and back in after `usermod`):
 
 ```bash
@@ -176,6 +178,10 @@ sudo grokbot-relay uninstall --purge -y     # remove everything, no prompts
 ```
 
 Always removes the service unit, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-relay` and `/etc/grokbot-relay/source`. Never touches your source clone. Also in the TUI (Uninstall, type `YES` to confirm).
+
+## Releases
+
+`VERSION` is the relay version. A release is the git tag `vX.Y.Z` (the same number) and a GitHub Release whose notes are that section of `CHANGELOG.md`. See [RELEASING.md](RELEASING.md).
 
 ## Safety
 

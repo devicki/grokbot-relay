@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2
+- relay: pin `@cursor/bdk` to exactly `0.2.28` in `package.json`, with `package-lock.json` refreshed. `0.2.28` still ships `cursor-grokbot-agents` (`ask`, `check`, `interrupt`, `list`). `0.2.29` and later remove that extension; stay on `0.2.28`. `allowScripts` is unchanged. This relay does not use the 0.2.28 removals (semantic search, and the unpublished `CATCH_DELIVERY_ID_HEADER`, `attachRelayMcp`, `CursorBackendClient`, and `postRelaySlackMessage` exports).
+- Releases: `VERSION` `X.Y.Z` is published as the annotated tag `vX.Y.Z` and a GitHub Release whose notes are that CHANGELOG section. `./bin/release` is a dry run; `./bin/release --apply` creates the tag and the Release, and it refuses to move an existing tag. See RELEASING.md. Run it on `main` after merge.
+
 ## 0.8.1
 - Simplified the sender header: one fixed `[relay:claude-code]` line plus one short explanation on every `grokbot__ask` message.
 - Removed the forgery neutralization (`[quoted-relay:` rewriting, zero-width stripping), `relay/lib/sender-tag.ts` and `GROKBOT_RELAY_SENDER_TAG`, along with its env comment and doctor line.

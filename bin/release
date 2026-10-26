@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Publish the grokbot-relay version in VERSION.
+# Dry-run unless --apply. Never moves an existing tag.
+#
+#   ./bin/release            # print the tag, notes, and commands
+#   ./bin/release --apply    # annotated tag vX.Y.Z, push that tag, gh release create
+#
+# Run this on main after the version commit is merged. Tagging a pull-request
+# commit is refused: a later squash merge does not move the tag.
+set -euo pipefail
+
+die() { echo "release: $*" >&2; exit 1; }
+
+apply=0
+case "${1:-}" in
+  "") ;;
+  --apply) apply=1 ;;
+  -h|--help)
+    echo "usage: ./bin/release [--apply]"
+    echo "Tags v\$(VERSION) and opens a GitHub Release from that CHANGELOG section."
+    echo "Default is a dry run. Never force-updates a tag."
+    exit 0
+    ;;
+  *) die "unknown argument: $1 (usage: ./bin/release [--apply])" ;;
+esac
+
+self_dir() { local p; p="$(readlink -f "${BASH_SOURCE[0]}")"; dirname "$p"; }
+root="$(cd "$(self_dir)/.." && pwd)"
+cd "$root"
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "$root is not a git checkout. Run this from the source clone, not the /opt install."
+
+ver="$(tr -d ' \n' < VERSION)"
+[[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION must be X.Y.Z (found: ${ver:-empty})"
+tag="v$ver"
+[[ -f CHANGELOG.md ]] || die "CHANGELOG.md is missing"
+
+notes="$(awk -v ver="$ver" '
+  $0 == "## " ver { found=1; next }
+  found && /^## / { exit }
+  found { print }
+' CHANGELOG.md | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
+[[ -n "$notes" ]] || die "CHANGELOG.md has no ## $ver section"
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  if (( apply )); then die "working tree is not clean"; fi
+  echo "warning: working tree is not clean; --apply will refuse until it is." >&2
+fi
+
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+  die "tag $tag already exists locally. Refusing to move it."
+fi
+if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+  die "tag $tag already exists on origin. Refusing to move it."
+fi
+
+on_main=0
+if ! git fetch -q origin main; then
+  echo "warning: git fetch origin main failed; checking the origin/main ref already present." >&2
+fi
+if git rev-parse -q --verify refs/remotes/origin/main >/dev/null \
+  && git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+  on_main=1
+fi
+
+echo "commit: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
+echo "tag:    $tag"
+echo
+echo "Release notes (CHANGELOG ## $ver):"
+printf '%s\n' "$notes"
+echo
+echo "Commands:"
+echo "  git tag -a $tag -m \"grokbot-relay $ver\""
+echo "  git push origin refs/tags/$tag"
+echo "  gh release create $tag --title \"grokbot-relay $ver\" --notes-file <section above>"
+
+if (( ! on_main )); then
+  echo
+  echo "HEAD is not on origin/main. Do not tag this commit: a squash merge will not move the tag, and tags are not force-updated." >&2
+  if (( apply )); then die "refusing --apply until this commit is on origin/main"; fi
+  echo "Dry run only. After merge: git checkout main && git pull && ./bin/release --apply" >&2
+  exit 0
+fi
+
+if (( ! apply )); then
+  echo
+  echo "Dry run. Re-run with --apply to create and push $tag."
+  exit 0
+fi
+
+git tag -a "$tag" -m "grokbot-relay $ver"
+git push origin "refs/tags/$tag"
+notes_file="$(mktemp)"
+trap 'rm -f "$notes_file"' EXIT
+printf '%s\n' "$notes" > "$notes_file"
+if command -v gh >/dev/null && gh release create "$tag" --title "grokbot-relay $ver" --notes-file "$notes_file"; then
+  echo "Created GitHub Release $tag."
+else
+  echo "Pushed tag $tag. The GitHub Release was not created. Run:" >&2
+  echo "  gh release create $tag --title \"grokbot-relay $ver\" --notes-file CHANGELOG-section.txt" >&2
+  exit 1
+fi

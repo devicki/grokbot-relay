@@ -97,6 +97,8 @@ sudo grokbot-relay bdk-upgrade            # 升級、validate，通過則重新�
 
 > 不要直接執行 `bdk update`；請使用 `grokbot-relay bdk-upgrade`（中繼使用 `/opt` 底下自己的 bdk）。
 
+> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充，請不要升過 `0.2.28`。
+
 每位一般使用者（`usermod` 之後請登出再登入）：
 
 ```bash
@@ -176,6 +178,10 @@ sudo grokbot-relay uninstall --purge -y     # 全部移除，不詢問
 ```
 
 一律移除服務 unit、`/opt/grokbot-relay`、`/usr/local/bin/grokbot-relay` 與 `/etc/grokbot-relay/source`。絕不動你的來源 clone。也可在 TUI 中操作（Uninstall，輸入 `YES` 確認）。
+
+## 發行版本
+
+`VERSION` 是中繼的版本。發行版本是相同編號的 git 標籤 `vX.Y.Z`，以及說明取自 `CHANGELOG.md` 該節的 GitHub Release。見 [RELEASING.md](RELEASING.md)。
 
 ## 安全
 
