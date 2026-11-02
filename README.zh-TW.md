@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # 最多升到 0.2.28；更高的目�
 
 > 不要直接執行 `bdk update`；請使用 `grokbot-relay bdk-upgrade`（中繼使用 `/opt` 底下自己的 bdk）。
 
-> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`bdk-upgrade` 會在 `npm install` 之前拒絕任何高於 `0.2.28` 的目標（`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充）。`relay-v1/` 的 v1 樹是 Agent SDK 0.3 的另一條線，不會改動這個釘選。見 [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md)。
+> 此版本將 `@cursor/bdk` 釘在正好 `0.2.28`。`bdk-upgrade` 會在 `npm install` 之前拒絕任何高於 `0.2.28` 的目標（`0.2.29` 之後會移除 `cursor-grokbot-agents` 擴充）。`relay-v1/` 的 v1 樹是 Agent SDK 0.5 的另一條線，不會改動這個釘選。見 [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md)。
 
 每位一般使用者（`usermod` 之後請登出再登入）：
 
@@ -181,13 +181,13 @@ sudo grokbot-relay uninstall --purge -y     # 全部移除，不詢問
 
 ## v0 與 v1
 
-上面的安裝是 **v0** 線（`relay/`、`@cursor/bdk@0.2.28`、`cursor-grokbot-agents`）。沒有改動。**v1** 是給 Agent SDK 0.3 的第二棵樹。`grokbot-relay install` 不會複製它，systemd unit 也不變。
+上面的安裝是 **v0** 線（`relay/`、`@cursor/bdk@0.2.28`、`cursor-grokbot-agents`）。沒有改動。**v1** 是給 Agent SDK 0.5 的第二棵樹。`grokbot-relay install` 不會複製它，systemd unit 也不變。
 
 | | v0 | v1 |
 | --- | --- | --- |
 | 目錄 | `relay/` | `relay-v1/` |
 | 版本 | 根目錄 `VERSION`（`0.8.x`），標籤 `v0.8.x` | `relay-v1/VERSION`（提議 `1.0.0`，尚未標籤） |
-| 套件 | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.3.0`（`bdk` 執行檔是同一個檔案） |
+| 套件 | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.5.0`（`bdk` 執行檔是同一個檔案） |
 | 連接 Grok Bot | `cursor-grokbot-agents` | 本儲存庫的 `/v0/grokbot` HTTP 客戶端 |
 | 目前 | `sudo grokbot-relay install` | 只從這個樹的檢出做試用 |
 

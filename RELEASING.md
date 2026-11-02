@@ -83,4 +83,4 @@ gh release create v1.0.0 --title "grokbot-relay 1.0.0" --notes-file notes-1.0.0.
 
 Do that on `main` after the v1 commit is merged. Do not tag the pull-request branch. Do not move `v0.8.2` or any older tag. Never pass `--force`.
 
-Installers check out an explicit tag. `v0.8.x` is the `relay/` tree on `@cursor/bdk@0.2.28`. `v1.0.0` will be the `relay-v1/` tree on `@grok/agent-sdk@0.3.x`. Neither line tracks npm `latest`. `bin/grokbot-relay` keeps installing `relay/` until a later change teaches it the second directory.
+Installers check out an explicit tag. `v0.8.x` is the `relay/` tree on `@cursor/bdk@0.2.28`. `v1.0.0` will be the `relay-v1/` tree on `@grok/agent-sdk@0.5.x`. Neither line tracks npm `latest`. `bin/grokbot-relay` keeps installing `relay/` until a later change teaches it the second directory.
