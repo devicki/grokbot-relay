@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### v1 line (`relay-v1/`)
+
+- `relay-v1/` moves from `@grok/agent-sdk@0.3.0` to `0.5.0`. No relay code changes: the APIs it uses (`defineAgent`, `defineTool`, `defineExtension`, `cursorExternalApiUrl`, `resolveApiKeySync`) have unchanged types, and `serve`, `mcp serve`, `login`, and `tool call` help is identical. The v0 tree stays on `@cursor/bdk@0.2.28`.
+
 ## 0.8.3
 - `bdk-upgrade` refuses any `@cursor/bdk` target above `0.2.28` before `npm install`. That release is the last one that ships `cursor-grokbot-agents`. Newer releases, including Agent SDK 0.3, are the v1 line (`docs/spike-bdk-0.3.md` and `relay-v1/`). A target within the ceiling is installed at that exact version. Rollback after a failed `bdk validate` is unchanged. `--dry-run` checks the ceiling and does not install.
 - `bdk-check` still reports npm latest when a newer SDK exists, and it no longer tells you to run `bdk-upgrade` for a version above that ceiling.
