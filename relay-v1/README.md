@@ -1,6 +1,6 @@
 # grokbot-relay v1
 
-HTTP client for the owner's Grok Bot agents on Agent SDK 0.5. This tree does not import `cursor-grokbot-agents`.
+HTTP client for the owner's Grok Bot agents on Agent SDK 0.6. This tree does not import `cursor-grokbot-agents`.
 
 v0 stays in [`../relay`](../relay) on `@cursor/bdk@0.2.28`. Install docs for both lines, in four languages, are the root [README](../README.md).
 

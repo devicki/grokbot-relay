@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # 0.2.28까지 올림. 그보다 높�
 
 > `bdk update`를 직접 실행하지 마세요. `grokbot-relay bdk-upgrade`를 쓰세요(relay는 `/opt` 아래의 자체 bdk를 씁니다).
 
-> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `bdk-upgrade`는 `0.2.28`보다 높은 대상을 `npm install` 전에 거부합니다 (`0.2.29` 이상은 `cursor-grokbot-agents` 확장을 뺍니다). `relay-v1/`의 v1 트리는 Agent SDK 0.5의 별도 라인이며 이 고정을 바꾸지 않습니다. [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md)를 보세요.
+> 이 릴리스는 `@cursor/bdk`를 정확히 `0.2.28`에 고정합니다. `bdk-upgrade`는 `0.2.28`보다 높은 대상을 `npm install` 전에 거부합니다 (`0.2.29` 이상은 `cursor-grokbot-agents` 확장을 뺍니다). `relay-v1/`의 v1 트리는 Agent SDK 0.6의 별도 라인이며 이 고정을 바꾸지 않습니다. [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md)를 보세요.
 
 일반 사용자 각자 (`usermod` 후 다시 로그인):
 
@@ -181,13 +181,13 @@ sudo grokbot-relay uninstall --purge -y     # 전부 삭제, 묻지 않음
 
 ## v0과 v1
 
-위의 설치는 **v0** 라인입니다 (`relay/`, `@cursor/bdk@0.2.28`, `cursor-grokbot-agents`). 바뀌지 않았습니다. **v1**은 Agent SDK 0.5용 두 번째 트리입니다. `grokbot-relay install`은 이것을 복사하지 않으며, systemd 유닛도 그대로입니다.
+위의 설치는 **v0** 라인입니다 (`relay/`, `@cursor/bdk@0.2.28`, `cursor-grokbot-agents`). 바뀌지 않았습니다. **v1**은 Agent SDK 0.6용 두 번째 트리입니다. `grokbot-relay install`은 이것을 복사하지 않으며, systemd 유닛도 그대로입니다.
 
 | | v0 | v1 |
 | --- | --- | --- |
 | 디렉터리 | `relay/` | `relay-v1/` |
 | 버전 | 루트 `VERSION` (`0.8.x`), 태그 `v0.8.x` | `relay-v1/VERSION` (제안 `1.0.0`, 아직 태그 없음) |
-| 패키지 | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.5.0` (`bdk` 바이너리는 같은 파일) |
+| 패키지 | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.6.0` (`bdk` 바이너리는 같은 파일) |
 | Grok Bot 접근 | `cursor-grokbot-agents` | 이 저장소의 `/v0/grokbot` HTTP 클라이언트 |
 | 지금 | `sudo grokbot-relay install` | 이 트리를 체크아웃한 시험만 |
 

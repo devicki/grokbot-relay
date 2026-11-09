@@ -4,6 +4,7 @@
 
 ### v1 line (`relay-v1/`)
 
+- `relay-v1/` moves from `@grok/agent-sdk@0.5.0` to `0.6.0` (`@cursor/sdk` 1.2.0 to 1.3.0). No relay code changes. The package copies of `defineAgent`, `defineTool`, `defineExtension`, `cursorExternalApiUrl`, and `resolveApiKeySync` are unchanged, and `tools: []` still means no native harness tools. The 0.6.0 behavior notes are Cursor-managed hosting only: Cloud Agent Allowlist checks for `url:` / `command:` connections and for `cursorAccount` bridges, and shared-workspace startup waits until `cursorAccount` connections resolve. This tree declares no `cursorAccount` connection and is not hosted. Local `agent-sdk serve` keeps the MCP Allowlist. `serve`, `mcp serve`, `login`, and `tool call` help matches 0.5.0. The v0 tree stays on `@cursor/bdk@0.2.28`.
 - `relay-v1/` moves from `@grok/agent-sdk@0.3.0` to `0.5.0`. No relay code changes: the APIs it uses (`defineAgent`, `defineTool`, `defineExtension`, `cursorExternalApiUrl`, `resolveApiKeySync`) have unchanged types, and `serve`, `mcp serve`, `login`, and `tool call` help is identical. The v0 tree stays on `@cursor/bdk@0.2.28`.
 
 ## 0.8.3

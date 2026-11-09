@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # upgrade up to 0.2.28; higher targets
 
 > Don't run `bdk update` directly; use `grokbot-relay bdk-upgrade` (the relay uses its own bdk under `/opt`).
 
-> This release pins `@cursor/bdk` to exactly `0.2.28`. `bdk-upgrade` refuses any target above `0.2.28` before `npm install` (`0.2.29` and later remove `cursor-grokbot-agents`). The v1 tree in `relay-v1/` is a separate Agent SDK 0.5 line and does not move this pin. See [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md).
+> This release pins `@cursor/bdk` to exactly `0.2.28`. `bdk-upgrade` refuses any target above `0.2.28` before `npm install` (`0.2.29` and later remove `cursor-grokbot-agents`). The v1 tree in `relay-v1/` is a separate Agent SDK 0.6 line and does not move this pin. See [docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md).
 
 Each regular user (log out and back in after `usermod`):
 
@@ -181,13 +181,13 @@ Always removes the service unit, `/opt/grokbot-relay`, `/usr/local/bin/grokbot-r
 
 ## v0 and v1
 
-The install above is the **v0** line (`relay/`, `@cursor/bdk@0.2.28`, `cursor-grokbot-agents`). It is unchanged. **v1** is a second tree for Agent SDK 0.5. `grokbot-relay install` does not copy it, and the systemd unit is unchanged.
+The install above is the **v0** line (`relay/`, `@cursor/bdk@0.2.28`, `cursor-grokbot-agents`). It is unchanged. **v1** is a second tree for Agent SDK 0.6. `grokbot-relay install` does not copy it, and the systemd unit is unchanged.
 
 | | v0 | v1 |
 | --- | --- | --- |
 | Directory | `relay/` | `relay-v1/` |
 | Version | root `VERSION` (`0.8.x`), tag `v0.8.x` | `relay-v1/VERSION` (proposed `1.0.0`, not tagged yet) |
-| Package | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.5.0` (the `bdk` binary is the same file) |
+| Package | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.6.0` (the `bdk` binary is the same file) |
 | Grok Bot access | `cursor-grokbot-agents` | this repo's HTTP client for `/v0/grokbot` |
 | Today | `sudo grokbot-relay install` | trial only, from a checkout of this tree |
 
