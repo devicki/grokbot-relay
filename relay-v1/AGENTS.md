@@ -1,6 +1,6 @@
 # grokbot-relay v1
 
-Agent SDK 0.5 project (`@grok/agent-sdk`). The served prompt is `bot/instructions.md`.
+Agent SDK 0.6 project (`@grok/agent-sdk`). The served prompt is `bot/instructions.md`.
 This tree does not import `cursor-grokbot-agents`. The v0 relay in `../relay` stays on `@cursor/bdk@0.2.28`.
 
 ## Loop

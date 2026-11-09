@@ -97,7 +97,7 @@ sudo grokbot-relay bdk-upgrade            # 0.2.28 まで更新。それを超�
 
 > `bdk update` を直接実行しないでください。`grokbot-relay bdk-upgrade` を使います（リレーは `/opt` 配下の独自の bdk を使います）。
 
-> このリリースは `@cursor/bdk` をちょうど `0.2.28` に固定します。`bdk-upgrade` は `0.2.28` より新しい対象を `npm install` の前に拒否します（`0.2.29` 以降は `cursor-grokbot-agents` 拡張を外します）。`relay-v1/` の v1 ツリーは Agent SDK 0.5 の別ラインで、この固定は動きません。[docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md) を参照してください。
+> このリリースは `@cursor/bdk` をちょうど `0.2.28` に固定します。`bdk-upgrade` は `0.2.28` より新しい対象を `npm install` の前に拒否します（`0.2.29` 以降は `cursor-grokbot-agents` 拡張を外します）。`relay-v1/` の v1 ツリーは Agent SDK 0.6 の別ラインで、この固定は動きません。[docs/spike-bdk-0.3.md](docs/spike-bdk-0.3.md) を参照してください。
 
 各一般ユーザー（`usermod` のあと一度ログアウトして再ログイン）：
 
@@ -181,13 +181,13 @@ sudo grokbot-relay uninstall --purge -y     # すべて削除、確認なし
 
 ## v0 と v1
 
-上のインストールは **v0** ラインです（`relay/`、`@cursor/bdk@0.2.28`、`cursor-grokbot-agents`）。変更していません。**v1** は Agent SDK 0.5 向けの二つ目のツリーです。`grokbot-relay install` はこれをコピーせず、systemd ユニットもそのままです。
+上のインストールは **v0** ラインです（`relay/`、`@cursor/bdk@0.2.28`、`cursor-grokbot-agents`）。変更していません。**v1** は Agent SDK 0.6 向けの二つ目のツリーです。`grokbot-relay install` はこれをコピーせず、systemd ユニットもそのままです。
 
 | | v0 | v1 |
 | --- | --- | --- |
 | ディレクトリ | `relay/` | `relay-v1/` |
 | バージョン | ルートの `VERSION`（`0.8.x`）、タグ `v0.8.x` | `relay-v1/VERSION`（提案 `1.0.0`、まだタグなし） |
-| パッケージ | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.5.0`（`bdk` バイナリは同じファイル） |
+| パッケージ | `@cursor/bdk@0.2.28` | `@grok/agent-sdk@0.6.0`（`bdk` バイナリは同じファイル） |
 | Grok Bot へのアクセス | `cursor-grokbot-agents` | このリポジトリの `/v0/grokbot` HTTP クライアント |
 | いま | `sudo grokbot-relay install` | このツリーをチェックアウトした試行のみ |
 
