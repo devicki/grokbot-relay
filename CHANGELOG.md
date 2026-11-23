@@ -4,6 +4,7 @@
 
 ### v1 line (`relay-v1/`)
 
+- `relay-v1/` moves from `@grok/agent-sdk@0.5.0` to `0.7.2`. No relay code changes: the APIs it uses (`defineAgent`, `defineTool`, `defineExtension`, `cursorExternalApiUrl`, `resolveApiKeySync`) still typecheck, and `npm run check`, `npm test`, and `npm run validate` pass. `@cursor/sdk` comes along at `1.4.2` (a dependency of 0.7.2, not a peer). The v0 tree stays on `@cursor/bdk@0.2.28`.
 - `relay-v1/` moves from `@grok/agent-sdk@0.3.0` to `0.5.0`. No relay code changes: the APIs it uses (`defineAgent`, `defineTool`, `defineExtension`, `cursorExternalApiUrl`, `resolveApiKeySync`) have unchanged types, and `serve`, `mcp serve`, `login`, and `tool call` help is identical. The v0 tree stays on `@cursor/bdk@0.2.28`.
 
 ## 0.8.3
